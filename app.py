@@ -23,44 +23,12 @@ st.markdown("""
 
 @st.cache_data(ttl=300)
 def load_data(uploaded_file):
-    # Lê a planilha extraindo os VALORES calculados das células (ignorando fórmulas quebradas)
+    # Lê a planilha extraindo os valores das células
     df = pd.read_excel(uploaded_file, engine='openpyxl')
     
-    # Remove linhas completamente vazias e limpa nomes das colunas
+    # Remove linhas completamente vazias e limpa cabeçalhos
     df = df.dropna(how='all')
     df.columns = [str(col).strip() for col in df.columns]
-    
-    # Identificador inteligente de colunas por múltiplos padrões
-    def achar_coluna(padroes):
-        for padrao in padroes:
-            for col in df.columns:
-                if padrao.lower() in str(col).lower():
-                    return col
-        return None
-
-    col_qtd = achar_coluna(['qtd. um registro', 'qtd', 'registro', 'quantidade'])
-    col_valor = achar_coluna(['montante em mi', 'montante', 'mi', 'valor'])
-    col_loja = achar_coluna(['centro', 'loja', 'unidade', 'filial'])
-    col_marca = achar_coluna(['fornecedor2', 'fornecedor 2', 'fornecedor', 'marca', 'brand'])
-
-    # Garante seleção padrão caso os nomes variem
-    if not col_qtd: col_qtd = df.columns[0]
-    if not col_valor: col_valor = df.columns[1] if len(df.columns) > 1 else df.columns[0]
-    if not col_loja: col_loja = df.columns[2] if len(df.columns) > 2 else df.columns[0]
-    if not col_marca: col_marca = df.columns[3] if len(df.columns) > 3 else df.columns[0]
-
-    # Limpeza numérica garantida
-    df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0)
-    df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0)
-    
-    # Tratamento para Centros e Marcas (impede que fiquem vazios)
-    df['Loja_Nome'] = df[col_loja].astype(str).str.strip().replace({'nan': 'Sem Centro', 'None': 'Sem Centro', '': 'Sem Centro'})
-    df['Marca_Nome'] = df[col_marca].astype(str).str.strip().replace({'nan': 'Sem Marca', 'None': 'Sem Marca', '': 'Sem Marca'})
-    
-    # Limpa linhas que contenham erros do Excel gravados como texto
-    erros = ['#ERROR!', '#ERRO!', '#N/A', '#REF!', '#VALUE!']
-    df = df[~df['Loja_Nome'].str.upper().isin(erros)]
-    df = df[~df['Marca_Nome'].str.upper().isin(erros)]
     
     return df
 
@@ -82,18 +50,52 @@ uploaded_file = st.sidebar.file_uploader("Envie seu arquivo Excel (.xlsx ou .xls
 
 if uploaded_file is not None:
     try:
-        df = load_data(uploaded_file)
+        df_raw = load_data(uploaded_file)
+        
+        st.sidebar.title("⚙️ Mapeamento de Colunas")
+        colunas_disponiveis = list(df_raw.columns)
+        
+        # Função auxiliar para buscar índice padrão
+        def pegar_indice_padrao(padroes, default_idx=0):
+            for i, col in enumerate(colunas_disponiveis):
+                for p in padroes:
+                    if p.lower() in str(col).lower():
+                        return i
+            return min(default_idx, len(colunas_disponiveis) - 1)
 
-        st.sidebar.title("Filtros")
+        idx_qtd = pegar_indice_padrao(['qtd', 'quantidade', 'registro'], 0)
+        idx_val = pegar_indice_padrao(['montante', 'valor', 'mi', 'r$'], 1)
+        idx_centro = pegar_indice_padrao(['centro', 'loja', 'unidade', 'filial'], 2)
+        idx_marca = pegar_indice_padrao(['fornecedor', 'marca', 'brand'], 3)
 
-        # Extrai Centros e Marcas únicos válidos
-        lojas = [x for x in sorted(df['Loja_Nome'].unique()) if x != '']
-        marcas = [x for x in sorted(df['Marca_Nome'].unique()) if x != '']
+        col_qtd = st.sidebar.selectbox("Coluna de Quantidade:", colunas_disponiveis, index=idx_qtd)
+        col_valor = st.sidebar.selectbox("Coluna de Valor (R$):", colunas_disponiveis, index=idx_val)
+        col_loja = st.sidebar.selectbox("Coluna de Centro / Loja:", colunas_disponiveis, index=idx_centro)
+        col_marca = st.sidebar.selectbox("Coluna de Marca / Fornecedor:", colunas_disponiveis, index=idx_marca)
+
+        # Processamento dos Dados
+        df = df_raw.copy()
+        
+        df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0)
+        df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0)
+        
+        # Converte para STRING para evitar o erro de ordenação ('<' not supported between float and str)
+        df['Loja_Nome'] = df[col_loja].astype(str).str.strip().replace({'nan': 'Sem Centro', 'None': 'Sem Centro', '': 'Sem Centro', 'NaN': 'Sem Centro'})
+        df['Marca_Nome'] = df[col_marca].astype(str).str.strip().replace({'nan': 'Sem Marca', 'None': 'Sem Marca', '': 'Sem Marca', 'NaN': 'Sem Marca'})
+        
+        erros = ['#ERROR!', '#ERRO!', '#N/A', '#REF!', '#VALUE!']
+        df = df[~df['Loja_Nome'].str.upper().isin(erros)]
+        df = df[~df['Marca_Nome'].str.upper().isin(erros)]
+
+        # Filtros
+        st.sidebar.title("🎯 Filtros")
+
+        lojas = sorted(list(set(df['Loja_Nome'])))
+        marcas = sorted(list(set(df['Marca_Nome'])))
 
         lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas, default=lojas)
         marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
 
-        # Se o usuário desmarcar tudo, mantém todas as opções selecionadas por padrão
         if not lojas_sel:
             lojas_sel = lojas
         if not marcas_sel:
@@ -122,7 +124,7 @@ if uploaded_file is not None:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # LINHA 1 DE GRÁFICOS (CENTROS)
+        # GRÁFICOS (CENTROS)
         graf_col1, graf_col2 = st.columns(2)
 
         with graf_col1:
