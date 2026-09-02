@@ -23,15 +23,16 @@ st.markdown("""
 
 @st.cache_data(ttl=300)
 def load_data(uploaded_file):
-    # Lê as primeiras 25 linhas para localizar a tabela
+    # Lê as primeiras 25 linhas sem assumir cabeçalho para analisar a estrutura
     df_preview = pd.read_excel(uploaded_file, engine='openpyxl', header=None, nrows=25)
     
     header_idx = 0
-    # Procura a linha que contém os nomes das colunas reais convertendo tudo para str
+    # Procura a linha que contém os termos reais das colunas
     for idx, row in df_preview.iterrows():
-        row_str = [str(val).lower() for val in row if pd.notna(val)]
+        # Converte individualmente cada célula para texto seguro evitando erros com float/NaN
+        row_str = [str(val).lower() for val in row.dropna().tolist()]
         texto_linha = " ".join(row_str)
-        if any(term in texto_linha for term in ['centro', 'loja', 'quantidade', 'fornecedor', 'marca', 'valor', 'qtd']):
+        if any(term in texto_linha for term in ['centro', 'loja', 'quantidade', 'fornecedor', 'marca', 'valor', 'qtd', 'soma de valor', 'montante']):
             header_idx = idx
             break
 
@@ -39,7 +40,7 @@ def load_data(uploaded_file):
     df = pd.read_excel(uploaded_file, engine='openpyxl', header=header_idx)
     df = df.dropna(how='all')
     
-    # Limpa nomes de colunas
+    # Padroniza e limpa o nome das colunas
     novas_colunas = []
     for i, col in enumerate(df.columns):
         col_str = str(col).replace('\n', ' ').strip()
@@ -50,6 +51,7 @@ def load_data(uploaded_file):
             
     df.columns = novas_colunas
     return df
+
 def formatar_moeda(val):
     if val < 0:
         return f"-R$ {abs(val):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -76,12 +78,14 @@ if uploaded_file is not None:
         def pegar_indice_padrao(padroes, default_idx=0, indices_ocupados=None):
             if indices_ocupados is None:
                 indices_ocupados = []
+            # 1. Tenta achar uma coluna que corresponda aos padrões e ainda não esteja ocupada
             for i, col in enumerate(colunas_disponiveis):
                 if i in indices_ocupados:
                     continue
                 for p in padroes:
                     if p.lower() in str(col).lower():
                         return i
+            # 2. Se não achar por texto, pega o próximo índice não ocupado
             for i in range(len(colunas_disponiveis)):
                 if i not in indices_ocupados:
                     return i
@@ -100,7 +104,7 @@ if uploaded_file is not None:
         # Processamento e sanitização rigorosa de dados
         df = df_raw.copy()
 
-        # Limpeza Numérica (Força conversão para float e substitui textos por 0)
+        # Limpeza Numérica
         df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0.0).astype(float)
         df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0.0).astype(float)
 
@@ -108,16 +112,16 @@ if uploaded_file is not None:
         df['Loja_Nome'] = df[col_loja].astype(str).str.strip().replace({'nan': 'Sem Centro', 'None': 'Sem Centro', '': 'Sem Centro', 'NaN': 'Sem Centro'})
         df['Marca_Nome'] = df[col_marca].astype(str).str.strip().replace({'nan': 'Sem Marca', 'None': 'Sem Marca', '': 'Sem Marca', 'NaN': 'Sem Marca'})
 
-        # Filtra linhas de erros do Excel
-        erros = ['#ERROR!', '#ERRO!', '#N/A', '#REF!', '#VALUE!']
+        # Filtra linhas de erros do Excel ou sujeira de cabeçalho
+        erros = ['#ERROR!', '#ERRO!', '#N/A', '#REF!', '#VALUE!', 'CHAMADO', 'STATUS', 'NAN']
         df = df[~df['Loja_Nome'].str.upper().isin(erros)]
         df = df[~df['Marca_Nome'].str.upper().isin(erros)]
 
         # Filtros na Barra Lateral
         st.sidebar.title("🎯 Filtros")
 
-        lojas = sorted([str(x) for x in df['Loja_Nome'].unique()])
-        marcas = sorted([str(x) for x in df['Marca_Nome'].unique()])
+        lojas = sorted([x for x in df['Loja_Nome'].unique() if x.strip() != ''])
+        marcas = sorted([x for x in df['Marca_Nome'].unique() if x.strip() != ''])
 
         lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas, default=lojas)
         marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
