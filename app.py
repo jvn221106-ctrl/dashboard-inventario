@@ -80,7 +80,6 @@ loja_permitida = PERMISSOES_EMAIL[email_usuario]
 NOME_ARQUIVO_EXCEL = "STATUS DOS INVENTÁRIOS.xlsm"
 
 def e_codigo_centro(val):
-    """Retorna True se o texto for um código de loja (ex: B001, B011)."""
     val_str = str(val).strip().upper()
     return bool(re.match(r"^B\d{3}$", val_str))
 
@@ -90,7 +89,6 @@ def carregar_dados():
         excel_file = pd.ExcelFile(NOME_ARQUIVO_EXCEL, engine="openpyxl")
         df_perdas = None
         
-        # Procura aba que tenha as colunas originais de registros
         for sheet in excel_file.sheet_names:
             df_temp = pd.read_excel(excel_file, sheet_name=sheet)
             cols = [str(c).strip() for c in df_temp.columns]
@@ -118,7 +116,7 @@ def carregar_dados():
         else:
             df["_LOJA_NOME_"] = df["_CENTRO_COD_"]
 
-        # Trata Marca e isola Lojas que caíram na coluna de Marca
+        # Trata Marca
         if "Fornecedor2" in df.columns:
             df["_MARCA_raw"] = df["Fornecedor2"].astype(str).str.strip()
         elif "Rótulos de Linha" in df.columns:
@@ -126,10 +124,9 @@ def carregar_dados():
         else:
             df["_MARCA_raw"] = ""
 
-        # Se o item na coluna de marca for na verdade um Centro (ex: B011), limpa para não virar marca
         df["_MARCA_"] = df["_MARCA_raw"].apply(lambda x: "" if e_codigo_centro(x) else x)
 
-        # Trata valores mantendo sinais reais e arredondando 2 casas decimais
+        # Trata valores
         if "Qtd. UM registro" in df.columns:
             df["_QTD_PERDA_"] = pd.to_numeric(df["Qtd. UM registro"], errors="coerce").fillna(0).round(2)
         elif "Soma de Qtd. UM registro" in df.columns:
@@ -179,7 +176,7 @@ if loja_permitida == "TODAS":
 else:
     df_filtrado = df_bruto[df_bruto["_CENTRO_COD_"].astype(str) == str(loja_permitida)]
 
-# 2. Filtro de Marca (Garante exclusão de Centros e "Não Informado")
+# 2. Filtro de Marca
 marcas_validas = df_filtrado[
     ~df_filtrado["_MARCA_"].str.upper().isin(["", "NAN", "NONE", "NÃO INFORMADO", "NAO INFORMADO"])
 ]
@@ -256,11 +253,20 @@ with col_g2:
 st.divider()
 
 # ==============================================================================
-# 6. TABELA DETALHADA DE DADOS
+# 6. TABELA DETALHADA DE DADOS (OCULTANDO AS TRÊS COLUNAS SOLICITADAS)
 # ==============================================================================
 st.subheader("📋 Detalhamento dos Registros")
 
-colunas_internas = ["_CENTRO_COD_", "_LOJA_NOME_", "_MARCA_raw", "_MARCA_", "_QTD_PERDA_", "_VALOR_PERDA_"]
-colunas_exibir = [c for c in df_filtrado.columns if c not in colunas_internas and not c.startswith("Unnamed")]
+colunas_bloqueadas = [
+    "_CENTRO_COD_", "_LOJA_NOME_", "_MARCA_raw", "_MARCA_", "_QTD_PERDA_", "_VALOR_PERDA_",
+    "Rótulos de Linha", "Soma de Qtd. UM registro", "Soma de Montante em MI"
+]
+
+colunas_exibir = [
+    c for c in df_filtrado.columns 
+    if c not in colunas_bloqueadas 
+    and not c.startswith("Unnamed") 
+    and not c.startswith("Soma de")
+]
 
 st.dataframe(df_filtrado[colunas_exibir], use_container_width=True, hide_index=True)
