@@ -80,7 +80,7 @@ loja_permitida = PERMISSOES_EMAIL[email_usuario]
 # ==============================================================================
 # 3. CARREGAMENTO E TRATAMENTO DA BASE DE DADOS
 # ==============================================================================
-NOME_ARQUIVO_EXCEL = "inventario.xlsx"  # Altere para o nome do seu arquivo Excel se for diferente
+NOME_ARQUIVO_EXCEL = "STATUS DOS INVENTÁRIOS.xlsm"  # Altere para o nome do seu arquivo Excel se for diferente
 
 @st.cache_data(ttl=300)
 def carregar_dados():
