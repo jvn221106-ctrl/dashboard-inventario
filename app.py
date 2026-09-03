@@ -23,7 +23,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- NOME DO ARQUIVO FIXO NO PROJETO ---
-NOME_ARQUIVO = "STATUS DOS INVENTÁRIOS.xlms"  # Altere para o nome exato do seu arquivo na pasta
+NOME_ARQUIVO = "STATUS DOS INVENTÁRIOS.xlsm"  # Altere para o nome exato do seu arquivo na pasta
 
 @st.cache_data(ttl=300)
 def load_data(file_path):
