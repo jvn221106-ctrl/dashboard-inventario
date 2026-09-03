@@ -80,7 +80,7 @@ loja_permitida = PERMISSOES_EMAIL[email_usuario]
 # ==============================================================================
 # 3. CARREGAMENTO E DETECÇÃO AUTOMÁTICA DA COLUNA
 # ==============================================================================
-NOME_ARQUIVO_EXCEL = "STATUS DOS INVENTÁRIOS.xlsx"  # Confirme o nome correto da planilha aqui
+NOME_ARQUIVO_EXCEL = "STATUS DOS INVENTÁRIOS.xlsm"  # Confirme o nome correto da planilha aqui
 
 @st.cache_data(ttl=300)
 def carregar_dados():
