@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import re
 
 # ==============================================================================
 # CONFIGURAÇÃO INICIAL DA PÁGINA
@@ -15,7 +16,6 @@ st.set_page_config(
 # 1. MAPEAMENTO DE E-MAILS PARA CENTROS (LOJAS)
 # ==============================================================================
 PERMISSOES_EMAIL = {
-    # --- GERENTES DE LOJA ---
     "sara.leite@vonnycosmeticos.com.br": "B001",
     "julio.fonseca@vonnycosmeticos.com.br": "B002",
     "fabiana.bertassi@vonnycosmeticos.com.br": "B006",
@@ -43,8 +43,6 @@ PERMISSOES_EMAIL = {
     "elza.silva@vonnycosmeticos.com.br": "B029",
     "joao.pereira@vonnycosmeticos.com.br": "B030",
     "controladoriaprevencao@gmail.com": "B031",
-
-    # --- ADMINISTRADORES / DIRETORIA (Acesso Total) ---
     "sergio.oliveira@vonnycosmeticos.com.br": "TODAS",
     "jvn221106@gmail.com": "TODAS"
 }
@@ -77,9 +75,14 @@ email_usuario = st.session_state["usuario_logado"]
 loja_permitida = PERMISSOES_EMAIL[email_usuario]
 
 # ==============================================================================
-# 3. LEITURA E TRATAMENTO DA ABA CORRETA DO EXCEL
+# 3. LEITURA E TRATAMENTO DA PLANILHA
 # ==============================================================================
 NOME_ARQUIVO_EXCEL = "STATUS DOS INVENTÁRIOS.xlsm"
+
+def e_codigo_centro(val):
+    """Retorna True se o texto for um código de loja (ex: B001, B011)."""
+    val_str = str(val).strip().upper()
+    return bool(re.match(r"^B\d{3}$", val_str))
 
 @st.cache_data(ttl=300)
 def carregar_dados():
@@ -87,6 +90,7 @@ def carregar_dados():
         excel_file = pd.ExcelFile(NOME_ARQUIVO_EXCEL, engine="openpyxl")
         df_perdas = None
         
+        # Procura aba que tenha as colunas originais de registros
         for sheet in excel_file.sheet_names:
             df_temp = pd.read_excel(excel_file, sheet_name=sheet)
             cols = [str(c).strip() for c in df_temp.columns]
@@ -95,16 +99,12 @@ def carregar_dados():
                 break
         
         if df_perdas is None:
-            if len(excel_file.sheet_names) > 1:
-                df_perdas = pd.read_excel(excel_file, sheet_name=1)
-            else:
-                df_perdas = pd.read_excel(excel_file, sheet_name=0)
+            df_perdas = pd.read_excel(excel_file, sheet_name=0)
 
         df = df_perdas.copy()
 
-        # Limpar colunas com 'Unnamed:'
+        # Remove colunas Unnamed
         df = df.loc[:, ~df.columns.astype(str).str.contains('^Unnamed')]
-
         df.columns = [str(c).strip() for c in df.columns]
 
         # Centro / Loja
@@ -118,28 +118,34 @@ def carregar_dados():
         else:
             df["_LOJA_NOME_"] = df["_CENTRO_COD_"]
 
-        # Marca / Fornecedor
+        # Trata Marca e isola Lojas que caíram na coluna de Marca
         if "Fornecedor2" in df.columns:
-            df["_MARCA_"] = df["Fornecedor2"].astype(str).str.strip()
+            df["_MARCA_raw"] = df["Fornecedor2"].astype(str).str.strip()
+        elif "Rótulos de Linha" in df.columns:
+            df["_MARCA_raw"] = df["Rótulos de Linha"].astype(str).str.strip()
         else:
-            df["_MARCA_"] = ""
+            df["_MARCA_raw"] = ""
 
-        # Mantedos sinais (+ e -) reais dos valores sem usar .abs()
+        # Se o item na coluna de marca for na verdade um Centro (ex: B011), limpa para não virar marca
+        df["_MARCA_"] = df["_MARCA_raw"].apply(lambda x: "" if e_codigo_centro(x) else x)
+
+        # Trata valores mantendo sinais reais e arredondando 2 casas decimais
         if "Qtd. UM registro" in df.columns:
-            df["_QTD_PERDA_"] = pd.to_numeric(df["Qtd. UM registro"], errors="coerce").fillna(0)
+            df["_QTD_PERDA_"] = pd.to_numeric(df["Qtd. UM registro"], errors="coerce").fillna(0).round(2)
+        elif "Soma de Qtd. UM registro" in df.columns:
+            df["_QTD_PERDA_"] = pd.to_numeric(df["Soma de Qtd. UM registro"], errors="coerce").fillna(0).round(2)
         else:
-            df["_QTD_PERDA_"] = 0
+            df["_QTD_PERDA_"] = 0.0
 
         if "Montante em MI" in df.columns:
-            df["_VALOR_PERDA_"] = pd.to_numeric(df["Montante em MI"], errors="coerce").fillna(0)
+            df["_VALOR_PERDA_"] = pd.to_numeric(df["Montante em MI"], errors="coerce").fillna(0).round(2)
+        elif "Soma de Montante em MI" in df.columns:
+            df["_VALOR_PERDA_"] = pd.to_numeric(df["Soma de Montante em MI"], errors="coerce").fillna(0).round(2)
         else:
-            df["_VALOR_PERDA_"] = 0
+            df["_VALOR_PERDA_"] = 0.0
 
         return df
 
-    except FileNotFoundError:
-        st.error(f"❌ O arquivo `{NOME_ARQUIVO_EXCEL}` não foi localizado no repositório.")
-        st.stop()
     except Exception as e:
         st.error(f"❌ Erro ao ler a planilha: {e}")
         st.stop()
@@ -147,7 +153,7 @@ def carregar_dados():
 df_bruto = carregar_dados()
 
 # ==============================================================================
-# 4. BARRA LATERAL (FILTROS DE CENTRO E MARCA)
+# 4. BARRA LATERAL (FILTROS)
 # ==============================================================================
 st.sidebar.title("🔐 Painel de Controle")
 st.sidebar.write(f"**Usuário:** `{email_usuario}`")
@@ -160,7 +166,7 @@ if st.sidebar.button("🚪 Sair"):
 st.sidebar.divider()
 st.sidebar.header("🔍 Filtros de Visualização")
 
-# Filtro Centro / Loja
+# 1. Filtro Centro / Loja
 if loja_permitida == "TODAS":
     centros_unicos = [str(x) for x in df_bruto["_CENTRO_COD_"].dropna().unique() if str(x).strip() not in ["", "NAN", "NONE"]]
     lista_centros = ["Todos os Centros"] + sorted(centros_unicos)
@@ -173,7 +179,7 @@ if loja_permitida == "TODAS":
 else:
     df_filtrado = df_bruto[df_bruto["_CENTRO_COD_"].astype(str) == str(loja_permitida)]
 
-# Filtro por Marca (revolvendo marcas em branco e "NÃO INFORMADO")
+# 2. Filtro de Marca (Garante exclusão de Centros e "Não Informado")
 marcas_validas = df_filtrado[
     ~df_filtrado["_MARCA_"].str.upper().isin(["", "NAN", "NONE", "NÃO INFORMADO", "NAO INFORMADO"])
 ]
@@ -206,12 +212,12 @@ with m4:
 
 st.divider()
 
-# GRÁFICOS TOP 10
 col_g1, col_g2 = st.columns(2)
 
 with col_g1:
     st.subheader("🏆 Top 10 Lojas com Maiores Perdas (R$)")
     top_lojas = df_filtrado.groupby("_LOJA_NOME_")["_VALOR_PERDA_"].sum().reset_index()
+    top_lojas["_VALOR_PERDA_"] = top_lojas["_VALOR_PERDA_"].round(2)
     top_lojas = top_lojas.sort_values(by="_VALOR_PERDA_", ascending=False).head(10)
     
     fig_lojas = px.bar(
@@ -228,11 +234,11 @@ with col_g1:
 
 with col_g2:
     st.subheader("📉 Top 10 Marcas com Maiores Perdas (R$)")
-    # Exclui "NÃO INFORMADO" e vazios do gráfico de marcas
     df_marcas_grafico = df_filtrado[
         ~df_filtrado["_MARCA_"].str.upper().isin(["", "NAN", "NONE", "NÃO INFORMADO", "NAO INFORMADO"])
     ]
     top_marcas = df_marcas_grafico.groupby("_MARCA_")["_VALOR_PERDA_"].sum().reset_index()
+    top_marcas["_VALOR_PERDA_"] = top_marcas["_VALOR_PERDA_"].round(2)
     top_marcas = top_marcas.sort_values(by="_VALOR_PERDA_", ascending=False).head(10)
     
     fig_marcas = px.bar(
@@ -254,7 +260,7 @@ st.divider()
 # ==============================================================================
 st.subheader("📋 Detalhamento dos Registros")
 
-colunas_auxiliares = ["_CENTRO_COD_", "_LOJA_NOME_", "_MARCA_", "_QTD_PERDA_", "_VALOR_PERDA_"]
-colunas_exibir = [c for c in df_filtrado.columns if c not in colunas_auxiliares and not c.startswith("Unnamed")]
+colunas_internas = ["_CENTRO_COD_", "_LOJA_NOME_", "_MARCA_raw", "_MARCA_", "_QTD_PERDA_", "_VALOR_PERDA_"]
+colunas_exibir = [c for c in df_filtrado.columns if c not in colunas_internas and not c.startswith("Unnamed")]
 
 st.dataframe(df_filtrado[colunas_exibir], use_container_width=True, hide_index=True)
