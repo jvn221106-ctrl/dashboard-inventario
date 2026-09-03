@@ -79,7 +79,7 @@ loja_permitida = PERMISSOES_EMAIL[email_usuario]
 # ==============================================================================
 # 3. TRATAMENTO INTELIGENTE DA PLANILHA EXCEL
 # ==============================================================================
-NOME_ARQUIVO_EXCEL = "STATUS DOS INVENTÁRIOS.xlsx"
+NOME_ARQUIVO_EXCEL = "STATUS DOS INVENTÁRIOS.xlsm"
 
 @st.cache_data(ttl=300)
 def carregar_dados():
