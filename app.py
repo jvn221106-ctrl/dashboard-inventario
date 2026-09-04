@@ -29,60 +29,54 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# URL do arquivo no OneDrive / SharePoint / Nuvem
 URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josue_pereira_vonnycosmeticos_onmicrosoft_com/IQAVAJHO0KlcS73eMCZZkJMEAdrs0fKrEhefibx1ieyMW_Y?e=B8QkcG&download=1"
 
 DB_FILE = "usuarios_db.json"
 
+# Perfil padrão inicial baseado no e-mail
 EMAILS_PERMITIDOS_PADRAO = {
-    "sara.leite@vonnycosmeticos.com.br": "B001",
-    "julio.fonseca@vonnycosmeticos.com.br": "B002",
-    "fabiana.bertassi@vonnycosmeticos.com.br": "B006",
-    "vanessa.tais@vonnycosmeticos.com.br": "B007",
-    "yara.silva@vonnycosmeticos.com.br": "B008",
-    "josemary.bezerra@vonnycosmeticos.com.br": "B009",
-    "maria.beserra@vonnycosmeticos.com.br": "B010",
-    "gislaine.barra@vonnycosmeticos.com.br": "B011",
-    "thamires.conceicao@vonnycosmeticos.com.br": "B012",
-    "vera.silva@vonnycosmeticos.com.br": "B013",
-    "vanessa.amaral@vonnycosmeticos.com.br": "B015",
-    "claudineia.mendes@vonnycosmeticos.com.br": "B016",
-    "thatiane.ferreira@vonnycosmeticos.com.br": "B017",
-    "katiane.silva@vonnycosmeticos.com.br": "B018",
-    "lanny.andryelly@vonnycosmeticos.com.br": "B019",
-    "suzana.silveira@vonnycosmeticos.com.br": "B020",
-    "luciana.vasconcelos@vonnycosmeticos.com.br": "B021",
-    "daiane.martins@vonnycosmeticos.com.br": "B022",
-    "gisele.trampusch@vonnycosmeticos.com.br": "B023",
-    "raquel.lopes@vonnycosmeticos.com.br": "B024",
-    "claudinea.santos@vonnycosmeticos.com.br": "B025",
-    "rosania.chagas@vonnycosmeticos.com.br": "B026",
-    "luana.costa@vonnycosmeticos.com.br": "B027",
-    "rosangela.botelho@vonnycosmeticos.com.br": "B028",
-    "elza.silva@vonnycosmeticos.com.br": "B029",
-    "joao.pereira@vonnycosmeticos.com.br": "B030",
-    "jorgiane.aragao@vonnycosmeticos.com.br": "B031",
-    "jvn221106@gmail.com": "TODAS",
-    "sergio.oliveira@vonnycosmeticos.com.br": "TODAS",
-    "controladoriaprevencao@gmail.com": "TODAS",
-    "josue.victor@vonnycosmeticos.com.br": "TODAS",
-    "vanusia.garcia@casadolojista.com.br": "TODAS"
+    "sara.leite@vonnycosmeticos.com.br": ("B001", "Gerente"),
+    "julio.fonseca@vonnycosmeticos.com.br": ("B002", "Gerente"),
+    "fabiana.bertassi@vonnycosmeticos.com.br": ("B006", "Gerente"),
+    "vanessa.tais@vonnycosmeticos.com.br": ("B007", "Gerente"),
+    "yara.silva@vonnycosmeticos.com.br": ("B008", "Gerente"),
+    "josemary.bezerra@vonnycosmeticos.com.br": ("B009", "Gerente"),
+    "maria.beserra@vonnycosmeticos.com.br": ("B010", "Gerente"),
+    "gislaine.barra@vonnycosmeticos.com.br": ("B011", "Gerente"),
+    "thamires.conceicao@vonnycosmeticos.com.br": ("B012", "Gerente"),
+    "vera.silva@vonnycosmeticos.com.br": ("B013", "Gerente"),
+    "vanessa.amaral@vonnycosmeticos.com.br": ("B015", "Gerente"),
+    "claudineia.mendes@vonnycosmeticos.com.br": ("B016", "Gerente"),
+    "thatiane.ferreira@vonnycosmeticos.com.br": ("B017", "Gerente"),
+    "katiane.silva@vonnycosmeticos.com.br": ("B018", "Gerente"),
+    "lanny.andryelly@vonnycosmeticos.com.br": ("B019", "Gerente"),
+    "suzana.silveira@vonnycosmeticos.com.br": ("B020", "Gerente"),
+    "luciana.vasconcelos@vonnycosmeticos.com.br": ("B021", "Gerente"),
+    "daiane.martins@vonnycosmeticos.com.br": ("B022", "Gerente"),
+    "gisele.trampusch@vonnycosmeticos.com.br": ("B023", "Gerente"),
+    "raquel.lopes@vonnycosmeticos.com.br": ("B024", "Gerente"),
+    "claudinea.santos@vonnycosmeticos.com.br": ("B025", "Gerente"),
+    "rosania.chagas@vonnycosmeticos.com.br": ("B026", "Gerente"),
+    "luana.costa@vonnycosmeticos.com.br": ("B027", "Gerente"),
+    "rosangela.botelho@vonnycosmeticos.com.br": ("B028", "Gerente"),
+    "elza.silva@vonnycosmeticos.com.br": ("B029", "Gerente"),
+    "joao.pereira@vonnycosmeticos.com.br": ("B030", "Gerente"),
+    "jorgiane.aragao@vonnycosmeticos.com.br": ("B031", "Gerente"),
+    "jvn221106@gmail.com": ("TODAS", "Administrador"),
+    "sergio.oliveira@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
+    "controladoriaprevencao@gmail.com": ("TODAS", "Administrador"),
+    "josue.victor@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
+    "vanusia.garcia@casadolojista.com.br": ("TODAS", "Administrador")
 }
 
-ADMINS = {
-    "jvn221106@gmail.com",
-    "sergio.oliveira@vonnycosmeticos.com.br",
-    "josue.victor@vonnycosmeticos.com.br",
-    "controladoriaprevencao@gmail.com"
-}
+OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Administrador"]
+
 
 # --- PERSISTÊNCIA E USUÁRIOS (JSON) ---
 def carregar_dados_db():
-    """Carrega usuários ativos e lista de e-mails removidos permanentemente."""
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
             data = json.load(f)
-            # Suporte para estrutura nova e legada
             if "usuarios" in data:
                 usuarios = data["usuarios"]
                 removidos = set(data.get("removidos", []))
@@ -94,10 +88,18 @@ def carregar_dados_db():
         removidos = set()
 
     atualizou = False
-    for email, loja in EMAILS_PERMITIDOS_PADRAO.items():
-        # Só adiciona os padrões se o e-mail não tiver sido removido explicitamente
+    for email, (loja, perfil_padrao) in EMAILS_PERMITIDOS_PADRAO.items():
         if email not in usuarios and email not in removidos:
-            usuarios[email] = {"loja": loja, "senha": None, "forcar_redefinicao": False}
+            usuarios[email] = {
+                "loja": loja,
+                "perfil": perfil_padrao,
+                "senha": None,
+                "forcar_redefinicao": False
+            }
+            atualizou = True
+        elif email in usuarios and "perfil" not in usuarios[email]:
+            # Migração para garantir que registros existentes tenham o atributo 'perfil'
+            usuarios[email]["perfil"] = perfil_padrao
             atualizou = True
 
     if atualizou or not os.path.exists(DB_FILE):
@@ -145,7 +147,6 @@ def load_data():
 
     df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0)
     df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0)
-    
     df['Loja_Nome'] = df[col_loja].fillna('S/ Centro').astype(str).str.strip()
     df['Marca_Nome'] = df[col_marca].fillna('Sem Marca').astype(str).str.strip()
     
@@ -224,13 +225,12 @@ def renderizar_tela_login():
     st.markdown("---")
     with st.expander("❓ Esqueceu a senha?"):
         st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinição de senha.")
-        st.caption("Ao receber a senha temporária e fazer login, o sistema exigirá a criação de uma nova senha pessoal.")
 
 
 # --- TELA OBRIGATÓRIA DE REDEFINIÇÃO DE SENHA ---
 def renderizar_tela_troca_obrigatoria():
     st.title("🔑 Redefinição de Senha Obrigatória")
-    st.warning("Você acessou com uma **senha temporária**. Por segurança, escolha uma nova senha definitiva para continuar.")
+    st.warning("Você acessou com uma **senha temporária**. Escolha uma nova senha definitiva para continuar.")
 
     usuarios, removidos = carregar_dados_db()
     email_logado = st.session_state["usuario_atual"]
@@ -270,24 +270,26 @@ def renderizar_aba_admin():
         dados_tabela.append({
             "E-mail": email,
             "Loja / Centro": dados.get("loja", "N/A"),
-            "Perfil": "Administrador" if email in ADMINS else "Gerente",
+            "Perfil / Cargo": dados.get("perfil", "Gerente"),
             "Primeiro Acesso": "✅ Concluído" if dados.get("senha") else "⏳ Pendente",
-            "Senha Temporária Ativa": "⚠️ Sim (Pendente Troca)" if dados.get("forcar_redefinicao") else "Não"
+            "Senha Temporária Ativa": "⚠️ Sim" if dados.get("forcar_redefinicao") else "Não"
         })
     st.dataframe(dados_tabela, use_container_width=True)
 
     st.markdown("---")
 
     # 2. Adicionar / Editar Usuário
-    st.subheader("➕ Adicionar ou Reativar Usuário")
-    st.write("Cadastre um novo e-mail corporativo, edite a loja vinculada ou reative um usuário excluído previamente.")
+    st.subheader("➕ Adicionar ou Editar Usuário")
+    st.write("Cadastre novos usuários, altere o centro vinculado ou altere o perfil do usuário.")
 
-    col_add1, col_add2, col_add3 = st.columns([2, 1, 1])
+    col_add1, col_add2, col_add3, col_add4 = st.columns([2, 1, 1, 1])
     with col_add1:
         novo_email = st.text_input("E-mail corporativo:", key="input_novo_email").strip().lower()
     with col_add2:
-        nova_loja = st.text_input("Centro / Loja (Ex: B001 ou TODAS):", key="input_nova_loja").strip().upper()
+        nova_loja = st.text_input("Centro (Ex: B001):", key="input_nova_loja").strip().upper()
     with col_add3:
+        novo_perfil = st.selectbox("Perfil / Cargo:", options=OPCOES_PERFIL, key="select_novo_perfil")
+    with col_add4:
         st.write("##")
         if st.button("Salvar Usuário", type="primary"):
             if not novo_email or "@" not in novo_email:
@@ -295,29 +297,32 @@ def renderizar_aba_admin():
             elif not nova_loja:
                 st.error("Por favor, informe a loja / centro.")
             else:
-                # Se o e-mail estava na lista de removidos, remove da lista negra
                 if novo_email in removidos:
                     removidos.remove(novo_email)
 
                 if novo_email in usuarios:
                     usuarios[novo_email]["loja"] = nova_loja
-                    st.success(f"✅ Centro do usuário **{novo_email}** atualizado para **{nova_loja}**!")
+                    usuarios[novo_email]["perfil"] = novo_perfil
+                    st.success(f"✅ Usuário **{novo_email}** atualizado para Centro **{nova_loja}** e Perfil **{novo_perfil}**!")
                 else:
-                    usuarios[novo_email] = {"loja": nova_loja, "senha": None, "forcar_redefinicao": False}
-                    st.success(f"🎉 Usuário **{novo_email}** cadastrado com sucesso para o centro **{nova_loja}**!")
+                    usuarios[novo_email] = {
+                        "loja": nova_loja,
+                        "perfil": novo_perfil,
+                        "senha": None,
+                        "forcar_redefinicao": False
+                    }
+                    st.success(f"🎉 Usuário **{novo_email}** cadastrado como **{novo_perfil}**!")
                 
                 salvar_dados_db(usuarios, removidos)
                 st.rerun()
 
     st.markdown("---")
 
-    # 3. Resetar Senha / Senha Temporária
+    # 3. Resetar Senha
     st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
-    st.write("Defina uma senha temporária para o usuário. Quando ele entrar com ela, o sistema irá obrigá-lo a criar uma nova senha.")
-
     col1, col2 = st.columns([2, 1])
     with col1:
-        usuario_selecionado = st.selectbox("Selecione o e-mail do usuário:", options=list(usuarios.keys()), key="select_reset_senha")
+        usuario_selecionado = st.selectbox("Selecione o e-mail:", options=list(usuarios.keys()), key="select_reset_senha")
         senha_temp = st.text_input("Senha Temporária:", type="password", key="input_senha_temp")
 
     with col2:
@@ -329,25 +334,25 @@ def renderizar_aba_admin():
                 usuarios[usuario_selecionado]["senha"] = gerar_hash(senha_temp)
                 usuarios[usuario_selecionado]["forcar_redefinicao"] = True
                 salvar_dados_db(usuarios, removidos)
-                st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**! O usuário será forçado a trocá-la ao entrar.")
+                st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
 
     st.markdown("---")
 
-    # 4. Excluir Usuário (Remoção Permanente)
+    # 4. Excluir Usuário
     st.subheader("🗑️ Remover Usuário Permanentemente")
     col_del1, col_del2 = st.columns([2, 1])
     with col_del1:
-        user_para_deletar = st.selectbox("Selecione o e-mail para remover:", options=list(usuarios.keys()), key="select_del_user")
+        user_para_deletar = st.selectbox("Selecione para remover:", options=list(usuarios.keys()), key="select_del_user")
     with col_del2:
         st.write("##")
         if st.button("Remover Usuário", type="secondary"):
             if user_para_deletar == st.session_state["usuario_atual"]:
-                st.error("Você não pode remover o seu próprio usuário logado.")
+                st.error("Você não pode remover seu próprio usuário logado.")
             else:
                 del usuarios[user_para_deletar]
-                removidos.add(user_para_deletar)  # Adiciona à lista permanente de bloqueados
+                removidos.add(user_para_deletar)
                 salvar_dados_db(usuarios, removidos)
-                st.success(f"🗑️ Usuário **{user_para_deletar}** removido permanentemente! O acesso foi revogado.")
+                st.success(f"🗑️ Usuário **{user_para_deletar}** removido permanentemente!")
                 st.rerun()
 
 
@@ -355,7 +360,10 @@ def renderizar_aba_admin():
 def renderizar_dashboard():
     usuarios, _ = carregar_dados_db()
     email_logado = st.session_state["usuario_atual"]
-    loja_usuario = usuarios[email_logado].get("loja", "N/A")
+    dados_usr = usuarios.get(email_logado, {})
+    
+    loja_usuario = dados_usr.get("loja", "N/A")
+    perfil_usuario = dados_usr.get("perfil", "Gerente")
 
     try:
         df = load_data()
@@ -364,7 +372,8 @@ def renderizar_dashboard():
 
         lojas_disponiveis = [x for x in sorted(df['Loja_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 's/ centro']]
         
-        if email_logado in ADMINS:
+        # Apenas Administradores têm visão global desbloqueada por padrão
+        if perfil_usuario == "Administrador":
             lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas_disponiveis, default=lojas_disponiveis)
         else:
             if loja_usuario in lojas_disponiveis:
@@ -383,7 +392,7 @@ def renderizar_dashboard():
         ]
 
         st.title("📊 Dashboard Executivo de Inventário")
-        st.markdown(f"**Usuário:** `{email_logado}` | **Loja:** `{loja_usuario}`")
+        st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}` | **Loja:** `{loja_usuario}`")
         st.markdown("---")
 
         perda_total_rs = df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum()
@@ -400,7 +409,7 @@ def renderizar_dashboard():
         st.markdown("<br>", unsafe_allow_html=True)
 
         # --- VISÃO EXCLUSIVA PARA ADMINISTRADORES ---
-        if email_logado in ADMINS:
+        if perfil_usuario == "Administrador":
             graf_col1, graf_col2 = st.columns(2)
 
             with graf_col1:
@@ -485,7 +494,7 @@ def renderizar_dashboard():
 
             st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
 
-        # --- MARCAS (VISÍVEL PARA TODOS) ---
+        # --- MARCAS (VISÍVEL PARA TODOS OS PERFIS) ---
         st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("⚠️ Ranking: Top 10 Marcas com Maior Perda")
 
@@ -589,7 +598,11 @@ elif st.session_state["troca_obrigatoria"]:
     renderizar_tela_troca_obrigatoria()
 
 else:
-    st.sidebar.markdown(f"👤 **Usuário Conectado:**\n`{st.session_state['usuario_atual']}`")
+    usuarios_db, _ = carregar_dados_db()
+    usr_atual = st.session_state["usuario_atual"]
+    dados_logado = usuarios_db.get(usr_atual, {})
+
+    st.sidebar.markdown(f"👤 **Usuário:** `{usr_atual}`\n\n💼 **Cargo:** `{dados_logado.get('perfil', 'Gerente')}`")
     
     with st.sidebar.expander("🔑 Alterar minha senha"):
         with st.form("form_mudar_senha_sidebar"):
@@ -600,7 +613,6 @@ else:
 
             if btn_mudar_sb:
                 usuarios_dict, removidos_set = carregar_dados_db()
-                usr_atual = st.session_state["usuario_atual"]
                 
                 if gerar_hash(senha_antiga_sb) != usuarios_dict[usr_atual]["senha"]:
                     st.error("Senha atual incorreta.")
@@ -620,9 +632,9 @@ else:
         st.session_state["troca_obrigatoria"] = False
         st.rerun()
 
-    usuario_logado = st.session_state["usuario_atual"]
+    perfil_logado = dados_logado.get("perfil", "Gerente")
 
-    if usuario_logado in ADMINS:
+    if perfil_logado == "Administrador":
         aba_dash, aba_admin = st.tabs(["📊 Dashboard Geral", "⚙️ Painel Admin"])
         with aba_dash:
             renderizar_dashboard()
