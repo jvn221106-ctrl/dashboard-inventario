@@ -89,17 +89,17 @@ def carregar_dados_db():
 
     atualizou = False
     for email, (loja, perfil_padrao) in EMAILS_PERMITIDOS_PADRAO.items():
-        if email not in usuarios and email not in removidos:
-            usuarios[email] = {
+        email_limpo = email.strip().lower()
+        if email_limpo not in usuarios and email_limpo not in removidos:
+            usuarios[email_limpo] = {
                 "loja": loja,
                 "perfil": perfil_padrao,
                 "senha": None,
                 "forcar_redefinicao": False
             }
             atualizou = True
-        elif email in usuarios and "perfil" not in usuarios[email]:
-            # Migração para garantir que registros existentes tenham o atributo 'perfil'
-            usuarios[email]["perfil"] = perfil_padrao
+        elif email_limpo in usuarios and "perfil" not in usuarios[email_limpo]:
+            usuarios[email_limpo]["perfil"] = perfil_padrao
             atualizou = True
 
     if atualizou or not os.path.exists(DB_FILE):
@@ -167,6 +167,14 @@ def formatar_qtd(val):
 
 
 # --- GERENCIAMENTO DE SESSÃO ---
+if "logado" not in st.session_state:
+    st.session_state["logado"] = False
+if "usuario_atual" not in st.session_state:
+    st.session_state["usuario_atual"] = None
+if "troca_obrigatoria" not in st.session_state:
+    st.session_state["troca_obrigatoria"] = False
+
+
 # --- TELA DE LOGIN ---
 def renderizar_tela_login():
     st.title("🔒 Vonny Cosméticos - Acesso ao Sistema")
@@ -175,7 +183,6 @@ def renderizar_tela_login():
     usuarios, removidos = carregar_dados_db()
 
     with st.form("form_login"):
-        # Trata espaços e transforma tudo em minúsculas
         email_input = st.text_input("E-mail corporativo:").strip().lower()
         senha_input = st.text_input("Senha:", type="password")
         btn_entrar = st.form_submit_button("Entrar", type="primary")
@@ -205,19 +212,6 @@ def renderizar_tela_login():
         else:
             if gerar_hash(senha_input) == dados_usuario["senha"]:
                 st.session_state["logado"] = True
-                st.session_state["usuario_atual"] = email_input
-                
-                if dados_usuario.get("forcar_redefinicao", False):
-                    st.session_state["troca_obrigatoria"] = True
-                
-                st.success("Login efetuado!")
-                st.rerun()
-            else:
-                st.error("Senha incorreta.")
-
-    st.markdown("---")
-    with st.expander("❓ Esqueceu a senha?"):
-        st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinição de senha.")
                 st.session_state["usuario_atual"] = email_input
                 
                 if dados_usuario.get("forcar_redefinicao", False):
