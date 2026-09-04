@@ -77,31 +77,40 @@ ADMINS = {
 }
 
 # --- PERSISTÊNCIA E USUÁRIOS (JSON) ---
-def carregar_usuarios():
+def carregar_dados_db():
+    """Carrega usuários ativos e lista de e-mails removidos permanentemente."""
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
-            usuarios = json.load(f)
+            data = json.load(f)
+            # Suporte para estrutura nova e legada
+            if "usuarios" in data:
+                usuarios = data["usuarios"]
+                removidos = set(data.get("removidos", []))
+            else:
+                usuarios = data
+                removidos = set()
     else:
         usuarios = {}
+        removidos = set()
 
     atualizou = False
     for email, loja in EMAILS_PERMITIDOS_PADRAO.items():
-        if email not in usuarios:
+        # Só adiciona os padrões se o e-mail não tiver sido removido explicitamente
+        if email not in usuarios and email not in removidos:
             usuarios[email] = {"loja": loja, "senha": None, "forcar_redefinicao": False}
             atualizou = True
-        else:
-            if "forcar_redefinicao" not in usuarios[email]:
-                usuarios[email]["forcar_redefinicao"] = False
-                atualizou = True
 
     if atualizou or not os.path.exists(DB_FILE):
-        salvar_usuarios(usuarios)
+        salvar_dados_db(usuarios, removidos)
 
-    return usuarios
+    return usuarios, removidos
 
-def salvar_usuarios(usuarios):
+def salvar_dados_db(usuarios, removidos):
     with open(DB_FILE, "w") as f:
-        json.dump(usuarios, f, indent=4)
+        json.dump({
+            "usuarios": usuarios,
+            "removidos": list(removidos)
+        }, f, indent=4)
 
 def gerar_hash(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
@@ -170,7 +179,7 @@ def renderizar_tela_login():
     st.title("🔒 Vonny Cosméticos - Acesso ao Sistema")
     st.write("Digite seu e-mail corporativo para acessar os indicadores.")
 
-    usuarios = carregar_usuarios()
+    usuarios, removidos = carregar_dados_db()
 
     with st.form("form_login"):
         email_input = st.text_input("E-mail corporativo:").strip().lower()
@@ -182,8 +191,8 @@ def renderizar_tela_login():
             st.error("Por favor, digite seu e-mail.")
             return
 
-        if email_input not in usuarios:
-            st.error("E-mail não autorizado. Entre em contato com o administrador.")
+        if email_input in removidos or email_input not in usuarios:
+            st.error("E-mail não autorizado ou acesso revogado. Entre em contato com o administrador.")
             return
 
         dados_usuario = usuarios[email_input]
@@ -194,7 +203,7 @@ def renderizar_tela_login():
             else:
                 usuarios[email_input]["senha"] = gerar_hash(senha_input)
                 usuarios[email_input]["forcar_redefinicao"] = False
-                salvar_usuarios(usuarios)
+                salvar_dados_db(usuarios, removidos)
                 st.session_state["logado"] = True
                 st.session_state["usuario_atual"] = email_input
                 st.success("🎉 Primeiro acesso realizado! Entrando...")
@@ -223,7 +232,7 @@ def renderizar_tela_troca_obrigatoria():
     st.title("🔑 Redefinição de Senha Obrigatória")
     st.warning("Você acessou com uma **senha temporária**. Por segurança, escolha uma nova senha definitiva para continuar.")
 
-    usuarios = carregar_usuarios()
+    usuarios, removidos = carregar_dados_db()
     email_logado = st.session_state["usuario_atual"]
 
     with st.form("form_troca_obrigatoria"):
@@ -242,7 +251,7 @@ def renderizar_tela_troca_obrigatoria():
 
         usuarios[email_logado]["senha"] = gerar_hash(nova_senha)
         usuarios[email_logado]["forcar_redefinicao"] = False
-        salvar_usuarios(usuarios)
+        salvar_dados_db(usuarios, removidos)
 
         st.session_state["troca_obrigatoria"] = False
         st.success("✅ Senha atualizada com sucesso!")
@@ -252,7 +261,7 @@ def renderizar_tela_troca_obrigatoria():
 # --- ABA PAINEL ADMIN ---
 def renderizar_aba_admin():
     st.header("⚙️ Painel do Administrador")
-    usuarios = carregar_usuarios()
+    usuarios, removidos = carregar_dados_db()
 
     # 1. Tabela de Usuários
     st.subheader("👥 Lista de Usuários e Status")
@@ -270,8 +279,8 @@ def renderizar_aba_admin():
     st.markdown("---")
 
     # 2. Adicionar / Editar Usuário
-    st.subheader("➕ Adicionar ou Editar Usuário")
-    st.write("Cadastre um novo e-mail corporativo ou edite o centro/loja vinculado a um e-mail existente.")
+    st.subheader("➕ Adicionar ou Reativar Usuário")
+    st.write("Cadastre um novo e-mail corporativo, edite a loja vinculada ou reative um usuário excluído previamente.")
 
     col_add1, col_add2, col_add3 = st.columns([2, 1, 1])
     with col_add1:
@@ -286,6 +295,10 @@ def renderizar_aba_admin():
             elif not nova_loja:
                 st.error("Por favor, informe a loja / centro.")
             else:
+                # Se o e-mail estava na lista de removidos, remove da lista negra
+                if novo_email in removidos:
+                    removidos.remove(novo_email)
+
                 if novo_email in usuarios:
                     usuarios[novo_email]["loja"] = nova_loja
                     st.success(f"✅ Centro do usuário **{novo_email}** atualizado para **{nova_loja}**!")
@@ -293,7 +306,7 @@ def renderizar_aba_admin():
                     usuarios[novo_email] = {"loja": nova_loja, "senha": None, "forcar_redefinicao": False}
                     st.success(f"🎉 Usuário **{novo_email}** cadastrado com sucesso para o centro **{nova_loja}**!")
                 
-                salvar_usuarios(usuarios)
+                salvar_dados_db(usuarios, removidos)
                 st.rerun()
 
     st.markdown("---")
@@ -315,13 +328,13 @@ def renderizar_aba_admin():
             else:
                 usuarios[usuario_selecionado]["senha"] = gerar_hash(senha_temp)
                 usuarios[usuario_selecionado]["forcar_redefinicao"] = True
-                salvar_usuarios(usuarios)
+                salvar_dados_db(usuarios, removidos)
                 st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**! O usuário será forçado a trocá-la ao entrar.")
 
     st.markdown("---")
 
-    # 4. Excluir Usuário
-    st.subheader("🗑️ Remover Usuário")
+    # 4. Excluir Usuário (Remoção Permanente)
+    st.subheader("🗑️ Remover Usuário Permanentemente")
     col_del1, col_del2 = st.columns([2, 1])
     with col_del1:
         user_para_deletar = st.selectbox("Selecione o e-mail para remover:", options=list(usuarios.keys()), key="select_del_user")
@@ -332,14 +345,15 @@ def renderizar_aba_admin():
                 st.error("Você não pode remover o seu próprio usuário logado.")
             else:
                 del usuarios[user_para_deletar]
-                salvar_usuarios(usuarios)
-                st.success(f"🗑️ Usuário **{user_para_deletar}** removido com sucesso!")
+                removidos.add(user_para_deletar)  # Adiciona à lista permanente de bloqueados
+                salvar_dados_db(usuarios, removidos)
+                st.success(f"🗑️ Usuário **{user_para_deletar}** removido permanentemente! O acesso foi revogado.")
                 st.rerun()
 
 
 # --- DASHBOARD VISUAL DE INVENTÁRIO ---
 def renderizar_dashboard():
-    usuarios = carregar_usuarios()
+    usuarios, _ = carregar_dados_db()
     email_logado = st.session_state["usuario_atual"]
     loja_usuario = usuarios[email_logado].get("loja", "N/A")
 
@@ -585,7 +599,7 @@ else:
             btn_mudar_sb = st.form_submit_button("Atualizar Senha")
 
             if btn_mudar_sb:
-                usuarios_dict = carregar_usuarios()
+                usuarios_dict, removidos_set = carregar_dados_db()
                 usr_atual = st.session_state["usuario_atual"]
                 
                 if gerar_hash(senha_antiga_sb) != usuarios_dict[usr_atual]["senha"]:
@@ -597,7 +611,7 @@ else:
                 else:
                     usuarios_dict[usr_atual]["senha"] = gerar_hash(nova_senha_sb)
                     usuarios_dict[usr_atual]["forcar_redefinicao"] = False
-                    salvar_usuarios(usuarios_dict)
+                    salvar_dados_db(usuarios_dict, removidos_set)
                     st.success("✅ Senha alterada com sucesso!")
 
     if st.sidebar.button("🚪 Sair / Logout"):
