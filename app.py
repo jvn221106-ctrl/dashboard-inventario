@@ -388,8 +388,8 @@ df = load_data()
 st.sidebar.title("Filtros")
 
 if st.sidebar.button("🔄 Atualizar Dados"):
-            st.cache_data.clear()
-            st.rerun()
+    st.cache_data.clear()
+    st.rerun()
 
 # Filtro de Divisões Regionais (Regional 1 / Regional 2)
 regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
@@ -407,7 +407,6 @@ lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel
 if perfil_usuario == "Administrador":
     lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas_disponiveis, default=lojas_disponiveis)
 elif perfil_usuario in ["Regional 1", "Regional 2"]:
-    # Separa lojas cadastradas por vírgula ou espaço
     lojas_permitidas_usr = [x.strip() for x in loja_usuario.replace(" ", ",").split(",") if x.strip()]
     lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr]
     lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas_filtradas_usr, default=lojas_filtradas_usr)
@@ -417,22 +416,19 @@ else:
     if not lojas_sel:
         lojas_sel = lojas_disponiveis
     st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
-    
-     marcas = [x for x in sorted(df['Marca_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 'sem marca']]
+
+marcas = [x for x in sorted(df['Marca_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 's/ centro', 'sem marca']]
 marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
 
-        df_filtered = df[
-            (df['Regional_Nome'].isin(regionais_sel)) &
-            (df['Loja_Nome'].isin(lojas_sel)) &
-            (df['Marca_Nome'].isin(marcas_sel))
-        ]
+df_filtered = df[
+    (df['Regional_Nome'].isin(regionais_sel)) &
+    (df['Loja_Nome'].isin(lojas_sel)) &
+    (df['Marca_Nome'].isin(marcas_sel))
+]
 
-        st.title("📊 Dashboard Executivo de Inventário")
-        st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
-        st.markdown("---")
-
-        perda_total_rs = df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum()
-        perda_total_un = df_filtered[df_filtered['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum()
+st.title("📊 Dashboard Executivo de Inventário")
+st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
+st.markdown("---")
         sobra_total_rs = df_filtered[df_filtered['Valor_Limpo'] > 0]['Valor_Limpo'].sum()
         resultado_net = sobra_total_rs + perda_total_rs
 
