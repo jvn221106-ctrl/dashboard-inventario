@@ -483,11 +483,11 @@ def renderizar_dashboard():
             yaxis_title="",
             showlegend=False
         )
-      try:
         st.plotly_chart(fig_reg_comp, use_container_width=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
     #  PERDA POR CENTRO (ADMINISTRADOR E REGIONAIS)    
+    try:
     if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
         # Tratamento dos dados para os gráficos por Centro
         df_centro = (
