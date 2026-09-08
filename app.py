@@ -446,35 +446,82 @@ def renderizar_dashboard():
         st.markdown("<br>", unsafe_allow_html=True)
 
         # --- VISÃO COMPARATIVA REGIONAL (ADMIN E GERENTES REGIONAIS) ---
-        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
-            st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
-            
-            df_reg_comp = (
-                df_filtered[df_filtered['Valor_Limpo'] < 0]
-                .groupby('Regional_Nome')
-                .agg({
-                    'Qtd_Limpa': lambda x: abs(x.sum()),
-                    'Valor_Limpo': lambda x: abs(x.sum())
-                })
-                .reset_index()
-                .sort_values(by='Valor_Limpo', ascending=False)
-            )
-            df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
+        if perfil_usuario == "Administrador":
+        st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
+        
+        df_reg_comp = (
+            df_filtered[df_filtered['Valor_Limpo'] < 0]
+            .groupby('Regional_Nome')
+            .agg({
+                'Qtd_Limpa': lambda x: abs(x.sum()),
+                'Valor_Limpo': lambda x: abs(x.sum())
+            })
+            .reset_index()
+            .sort_values(by='Valor_Limpo', ascending=False)
+        )
+        df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
 
-            fig_reg_comp = px.bar(
-                df_reg_comp,
-                x='Regional_Nome',
-                y='Valor_Limpo',
-                text='Texto_Valor',
-                color='Regional_Nome',
-                color_discrete_map={
-                    'Regional 1': '#4ba3e3',
-                    'Regional 2': '#ff7f0e',
-                },
-                labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
+        fig_reg_comp = px.bar(
+            df_reg_comp,
+            x='Regional_Nome',
+            y='Valor_Limpo',
+            text='Texto_Valor',
+            color='Regional_Nome',
+            color_discrete_map={
+                'Regional 1': '#4ba3e3',
+                'Regional 2': '#ff7f0e',
+                'Sem Regional': '#888888'
+            },
+            labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
+        )
+        fig_reg_comp.update_traces(textposition='inside')
+        fig_reg_comp.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_title="",
+            yaxis_title="",
+            showlegend=False
+        )
+        st.plotly_chart(fig_reg_comp, use_container_width=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    # =========================================================================
+    # 2. PERDA POR CENTRO (ADMINISTRADOR E REGIONAIS)
+    # =========================================================================
+    if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
+        # Tratamento dos dados para os gráficos por Centro
+        df_centro = (
+            df_filtered[df_filtered['Valor_Limpo'] < 0]
+            .groupby('Centro_Nome')
+            .agg({
+                'Qtd_Limpa': lambda x: abs(x.sum()),
+                'Valor_Limpo': lambda x: abs(x.sum())
+            })
+            .reset_index()
+            .sort_values(by='Valor_Limpo', ascending=False)
+        )
+        df_centro['Texto_Qtd'] = df_centro['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+        df_centro['Texto_Valor'] = df_centro['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
+
+        # Criação das duas colunas lado a lado
+        col_centro1, col_centro2 = st.columns(2)
+
+        # --- Gráfico 1: Perda por Centro (Qtd) ---
+        with col_centro1:
+            st.subheader("📦 Perda por Centro (Qtd)")
+            fig_centro_qtd = px.bar(
+                df_centro,
+                x='Centro_Nome',
+                y='Qtd_Limpa',
+                text='Texto_Qtd',
+                labels={'Qtd_Limpa': 'Quantidade', 'Centro_Nome': ''}
             )
-            fig_reg_comp.update_traces(textposition='inside')
-            fig_reg_comp.update_layout(
+            fig_centro_qtd.update_traces(
+                marker_color='#4ba3e3',
+                textposition='inside'
+            )
+            fig_centro_qtd.update_layout(
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -482,93 +529,33 @@ def renderizar_dashboard():
                 yaxis_title="",
                 showlegend=False
             )
-            st.plotly_chart(fig_reg_comp, use_container_width=True)
+            st.plotly_chart(fig_centro_qtd, use_container_width=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            graf_col1, graf_col2 = st.columns(2)
-
-            with graf_col1:
-                st.subheader("📦 Perda por Centro (Qtd)")
-                df_qtd_lojas = (
-                    df_filtered[df_filtered['Qtd_Limpa'] < 0]
-                    .groupby('Loja_Nome')['Qtd_Limpa']
-                    .sum()
-                    .abs()
-                    .reset_index()
-                    .sort_values(by='Qtd_Limpa', ascending=False)
-                )
-                df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-
-                fig_qtd_lojas = px.bar(
-                    df_qtd_lojas,
-                    x='Loja_Nome',
-                    y='Qtd_Limpa',
-                    text='Texto_Qtd',
-                    labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
-                )
-                fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
-                fig_qtd_lojas.update_layout(
-                    template="plotly_dark",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    xaxis_title="",
-                    yaxis_title=""
-                )
-                st.plotly_chart(fig_qtd_lojas, use_container_width=True)
-
-            with graf_col2:
-                st.subheader("🎯 Perda por Centro (R$)")
-                df_lojas = (
-                    df_filtered[df_filtered['Valor_Limpo'] < 0]
-                    .groupby('Loja_Nome')['Valor_Limpo']
-                    .sum()
-                    .abs()
-                    .reset_index()
-                    .sort_values(by='Valor_Limpo', ascending=False)
-                )
-                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
-
-                fig_lojas = px.bar(
-                    df_lojas,
-                    x='Loja_Nome',
-                    y='Valor_Limpo',
-                    text='Texto_Valor',
-                    labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
-                )
-                fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
-                fig_lojas.update_layout(
-                    template="plotly_dark",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    xaxis_title="",
-                    yaxis_title=""
-                )
-                st.plotly_chart(fig_lojas, use_container_width=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
-
-            df_top10_centros = (
-                df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
-                .groupby(['Loja_Nome', 'Regional_Nome'])
-                .agg({
-                    'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
-                    'Valor_Limpo': lambda x: abs(x[x < 0].sum())
-                })
-                .reset_index()
-                .sort_values(by='Valor_Limpo', ascending=False)
-                .head(10)
+        # --- Gráfico 2: Perda por Centro (R$) ---
+        with col_centro2:
+            st.subheader("🎯 Perda por Centro (R$)")
+            fig_centro_val = px.bar(
+                df_centro,
+                x='Centro_Nome',
+                y='Valor_Limpo',
+                text='Texto_Valor',
+                labels={'Valor_Limpo': 'Valor (R$)', 'Centro_Nome': ''}
             )
+            fig_centro_val.update_traces(
+                marker_color='#4ba3e3',
+                textposition='inside'
+            )
+            fig_centro_val.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis_title="",
+                yaxis_title="",
+                showlegend=False
+            )
+            st.plotly_chart(fig_centro_val, use_container_width=True)
 
-            df_top10_centros.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_centros))])
-            df_top10_centros = df_top10_centros[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-            df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
-
-            df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-            df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
-
-            st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
         # --- MARCAS (VISÍVEL PARA TODOS OS PERFIS) ---
         st.markdown("<br>", unsafe_allow_html=True)
