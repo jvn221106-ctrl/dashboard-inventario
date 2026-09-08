@@ -391,32 +391,33 @@ if st.sidebar.button("🔄 Atualizar Dados"):
             st.cache_data.clear()
             st.rerun()
 
-        # Filtro de Divisões Regionais (Regional 1 / Regional 2)
+# Filtro de Divisões Regionais (Regional 1 / Regional 2)
 regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
-        
+
 if perfil_usuario == "Regional 1":
     regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=["Regional 1"])
 elif perfil_usuario == "Regional 2":
     regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=["Regional 2"])
 else:
-    regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=regionais_disponiveis)        
-    lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 's/ centro']]
-        
-        # Tratamento de permissões de lojas por usuário
-        if perfil_usuario == "Administrador":
-            lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas_disponiveis, default=lojas_disponiveis)
-        elif perfil_usuario in ["Regional 1", "Regional 2"]:
-            # Separa lojas cadastradas por vírgula ou espaço
-            lojas_permitidas_usr = [x.strip() for x in loja_usuario.replace(" ", ",").split(",") if x.strip()]
-            lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr]
-            lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas_filtradas_usr, default=lojas_filtradas_usr)
-        else:
-            lojas_permitidas_usr = [x.strip() for x in loja_usuario.replace(" ", ",").split(",") if x.strip()]
-            lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr]
-            if not lojas_sel:
-                lojas_sel = lojas_disponiveis
-            st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
+    regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=regionais_disponiveis)
 
+lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 's/ centro']]
+
+# Tratamento de permissões de lojas por usuário
+if perfil_usuario == "Administrador":
+    lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas_disponiveis, default=lojas_disponiveis)
+elif perfil_usuario in ["Regional 1", "Regional 2"]:
+    # Separa lojas cadastradas por vírgula ou espaço
+    lojas_permitidas_usr = [x.strip() for x in loja_usuario.replace(" ", ",").split(",") if x.strip()]
+    lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr]
+    lojas_sel = st.sidebar.multiselect("Selecione os Centros:", options=lojas_filtradas_usr, default=lojas_filtradas_usr)
+else:
+    lojas_permitidas_usr = [x.strip() for x in loja_usuario.replace(" ", ",").split(",") if x.strip()]
+    lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr]
+    if not lojas_sel:
+        lojas_sel = lojas_disponiveis
+    st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
+    
         marcas = [x for x in sorted(df['Marca_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 'sem marca']]
         marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
 
