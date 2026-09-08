@@ -60,7 +60,7 @@ EMAILS_PERMITIDOS_PADRAO = {
     "katiane.silva@vonnycosmeticos.com.br": ("B018", "Gerente"),
     "lanny.andryelly@vonnycosmeticos.com.br": ("B019", "Gerente"),
     "suzana.silveira@vonnycosmeticos.com.br": ("B020", "Gerente"),
-    "luciana.vasconcelos@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Regional 1"),
+    "luciana.vasconcelos@vonnycosmeticos.com.br": ("B021", "Gerente"),
     "wagner.valle@casadolojista.com.br": (STR_REGIONAL_2, "Regional 2"),
     "daiane.martins@vonnycosmeticos.com.br": ("B022", "Gerente"),
     "gisele.trampusch@vonnycosmeticos.com.br": ("B023", "Gerente"),
