@@ -556,7 +556,7 @@ try:
             )
             st.plotly_chart(fig_centro_val, use_container_width=True)
 
-    except Exception as e:
+except Exception as e:
         st.error(f"Erro ao processar dados por Centro: {e}")
 
 st.markdown("<br>", unsafe_allow_html=True)
