@@ -470,7 +470,6 @@ def renderizar_dashboard():
             color_discrete_map={
                 'Regional 1': '#4ba3e3',
                 'Regional 2': '#ff7f0e',
-                'Sem Regional': '#888888'
             },
             labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
         )
@@ -486,9 +485,8 @@ def renderizar_dashboard():
         st.plotly_chart(fig_reg_comp, use_container_width=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
-    # =========================================================================
-    # 2. PERDA POR CENTRO (ADMINISTRADOR E REGIONAIS)
-    # =========================================================================
+    #  PERDA POR CENTRO (ADMINISTRADOR E REGIONAIS)
+    
     if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
         # Tratamento dos dados para os gráficos por Centro
         df_centro = (
