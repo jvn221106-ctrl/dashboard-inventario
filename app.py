@@ -445,49 +445,49 @@ def renderizar_dashboard():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # --- VISÃO COMPARATIVA REGIONAL (ADMIN E GERENTES REGIONAIS) ---
-        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
-            st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
-            
-            df_reg_comp = (
-                df_filtered[df_filtered['Valor_Limpo'] < 0]
-                .groupby('Regional_Nome')
-                .agg({
-                    'Qtd_Limpa': lambda x: abs(x.sum()),
-                    'Valor_Limpo': lambda x: abs(x.sum())
-                })
-                .reset_index()
-                .sort_values(by='Valor_Limpo', ascending=False)
-            )
-            df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
+# --- VISÃO COMPARATIVA REGIONAL (APENAS ADMINISTRADOR) ---
+if perfil_usuario == "Administrador":
+    st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
 
-            fig_reg_comp = px.bar(
-                df_reg_comp,
-                x='Regional_Nome',
-                y='Valor_Limpo',
-                text='Texto_Valor',
-                color='Regional_Nome',
-                color_discrete_map={
-                    'Regional 1': '#4ba3e3',
-                    'Regional 2': '#ff7f0e',
-                    'Sem Regional': '#888888'
-                },
-                labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
-            )
-            fig_reg_comp.update_traces(textposition='inside')
-            fig_reg_comp.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis_title="",
-                yaxis_title="",
-                showlegend=False
-            )
-            st.plotly_chart(fig_reg_comp, use_container_width=True)
+    df_reg_comp = (
+        df_filtered[df_filtered['Valor_Limpo'] < 0]
+        .groupby('Regional_Nome')
+        .agg({
+            'Qtd_Limpa': lambda x: abs(x.sum()),
+            'Valor_Limpo': lambda x: abs(x.sum())
+        })
+        .reset_index()
+        .sort_values(by='Valor_Limpo', ascending=False)
+    )
+    df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
 
-            st.markdown("<br>", unsafe_allow_html=True)
+    fig_reg_comp = px.bar(
+        df_reg_comp,
+        x='Regional_Nome',
+        y='Valor_Limpo',
+        text='Texto_Valor',
+        color='Regional_Nome',
+        color_discrete_map={
+            'Regional 1': '#4ba3e3',
+            'Regional 2': '#ff7f0e',
+            'Sem Regional': '#888888'
+        },
+        labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
+    )
+    fig_reg_comp.update_traces(textposition='inside')
+    fig_reg_comp.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis_title="",
+        yaxis_title="",
+        showlegend=False
+    )
+    st.plotly_chart(fig_reg_comp, use_container_width=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-            graf_col1, graf_col2 = st.columns(2)
+# --- VISÃO POR CENTRO (TODOS OS PERFIS VÊEM) ---
+graf_col1, graf_col2 = st.columns(2)
 
             with graf_col1:
                 st.subheader("📦 Perda por Centro (Qtd)")
