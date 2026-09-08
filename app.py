@@ -418,8 +418,8 @@ else:
         lojas_sel = lojas_disponiveis
     st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
     
-        marcas = [x for x in sorted(df['Marca_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 'sem marca']]
-        marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
+     marcas = [x for x in sorted(df['Marca_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 'sem marca']]
+marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
 
         df_filtered = df[
             (df['Regional_Nome'].isin(regionais_sel)) &
