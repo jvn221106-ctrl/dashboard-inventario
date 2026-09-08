@@ -484,8 +484,6 @@ def renderizar_dashboard():
             showlegend=False
         )
       try:
-        df = load_data()
-          
         st.plotly_chart(fig_reg_comp, use_container_width=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
