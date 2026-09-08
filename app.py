@@ -392,7 +392,7 @@ if st.sidebar.button("🔄 Atualizar Dados"):
             st.rerun()
 
         # Filtro de Divisões Regionais (Regional 1 / Regional 2)
-        regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
+regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
         
         if perfil_usuario == "Regional 1":
             regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=["Regional 1"])
