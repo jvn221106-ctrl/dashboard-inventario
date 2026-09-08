@@ -487,9 +487,8 @@ def renderizar_dashboard():
         st.markdown("<br>", unsafe_allow_html=True)
 
 # PERDA POR CENTRO (ADMINISTRADOR E REGIONAIS)
-try:
-    if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
-
+if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
+    try:
         # Tratamento dos dados para os gráficos por Centro
         df_centro = (
             df_filtered[df_filtered['Valor_Limpo'] < 0]
@@ -556,7 +555,7 @@ try:
             )
             st.plotly_chart(fig_centro_val, use_container_width=True)
 
-finally Exception as e:
+    except Exception as e:
         st.error(f"Erro ao processar dados por Centro: {e}")
 
 st.markdown("<br>", unsafe_allow_html=True)
