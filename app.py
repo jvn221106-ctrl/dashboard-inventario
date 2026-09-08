@@ -393,7 +393,7 @@ def renderizar_dashboard():
             st.rerun()
 
         # Filtro de Divisões Regionais (Regional 1 / Regional 2)
-        regionais_disponiveis = [r for r in ["Regional 1", "Regional 2", "Sem Regional"] if r in df['Regional_Nome'].unique()]
+        regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
         
         if perfil_usuario == "Regional 1":
             regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=["Regional 1"])
@@ -446,7 +446,7 @@ def renderizar_dashboard():
         st.markdown("<br>", unsafe_allow_html=True)
 
         # --- VISÃO COMPARATIVA REGIONAL (ADMIN E GERENTES REGIONAIS) ---
-        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
+        if perfil_usuario in ["Administrador"]:
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
             
             df_reg_comp = (
@@ -470,7 +470,6 @@ def renderizar_dashboard():
                 color_discrete_map={
                     'Regional 1': '#4ba3e3',
                     'Regional 2': '#ff7f0e',
-                    'Sem Regional': '#888888'
                 },
                 labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
             )
