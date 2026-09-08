@@ -383,7 +383,7 @@ def renderizar_dashboard():
     loja_usuario = dados_usr.get("loja", "N/A")
     perfil_usuario = dados_usr.get("perfil", "Gerente")
 
-        df = load_data()
+df = load_data()
 
         st.sidebar.title("Filtros")
 
