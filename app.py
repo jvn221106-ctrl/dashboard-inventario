@@ -487,8 +487,9 @@ def renderizar_dashboard():
         st.markdown("<br>", unsafe_allow_html=True)
 
 # PERDA POR CENTRO (ADMINISTRADOR E REGIONAIS)
-if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
-    try:
+try:
+    if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
+
         # Tratamento dos dados para os gráficos por Centro
         df_centro = (
             df_filtered[df_filtered['Valor_Limpo'] < 0]
