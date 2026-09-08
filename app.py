@@ -394,12 +394,12 @@ if st.sidebar.button("🔄 Atualizar Dados"):
         # Filtro de Divisões Regionais (Regional 1 / Regional 2)
 regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
         
-        if perfil_usuario == "Regional 1":
-            regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=["Regional 1"])
-        elif perfil_usuario == "Regional 2":
-            regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=["Regional 2"])
-        else:
-            regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=regionais_disponiveis)
+if perfil_usuario == "Regional 1":
+regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=["Regional 1"])
+elif perfil_usuario == "Regional 2":
+regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=["Regional 2"])
+else:
+    regionais_sel = st.sidebar.multiselect("Selecione a Divisão Regional:", options=regionais_disponiveis, default=regionais_disponiveis)
 
         lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 's/ centro']]
         
