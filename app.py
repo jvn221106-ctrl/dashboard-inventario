@@ -488,75 +488,71 @@ def renderizar_dashboard():
 
 # PERDA POR CENTRO (ADMINISTRADOR E REGIONAIS)
 if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
-    try:
-        # Tratamento dos dados para os gráficos por Centro
-        df_centro = (
-            df_filtered[df_filtered['Valor_Limpo'] < 0]
-            .groupby('Centro_Nome')
-            .agg({
-                'Qtd_Limpa': lambda x: abs(x.sum()),
-                'Valor_Limpo': lambda x: abs(x.sum())
-            })
-            .reset_index()
-            .sort_values(by='Valor_Limpo', ascending=False)
+    # Tratamento dos dados para os gráficos por Centro
+    df_centro = (
+        df_filtered[df_filtered['Valor_Limpo'] < 0]
+        .groupby('Centro_Nome')
+        .agg({
+            'Qtd_Limpa': lambda x: abs(x.sum()),
+            'Valor_Limpo': lambda x: abs(x.sum())
+        })
+        .reset_index()
+        .sort_values(by='Valor_Limpo', ascending=False)
+    )
+    
+    df_centro['Texto_Qtd'] = df_centro['Qtd_Limpa'].apply(lambda x: f"{x:,.0f} un")
+    df_centro['Texto_Valor'] = df_centro['Valor_Limpo'].apply(lambda x: f"R$ {x:,.2f}")
+
+    # Criação das duas colunas lado a lado
+    col_centro1, col_centro2 = st.columns(2)
+
+    # --- Gráfico 1: Perda por Centro (Qtd) ---
+    with col_centro1:
+        st.subheader("📦 Perda por Centro (Qtd)")
+        fig_centro_qtd = px.bar(
+            df_centro,
+            x='Centro_Nome',
+            y='Qtd_Limpa',
+            text='Texto_Qtd',
+            labels={'Qtd_Limpa': 'Quantidade', 'Centro_Nome': ''}
         )
-        
-        df_centro['Texto_Qtd'] = df_centro['Qtd_Limpa'].apply(lambda x: f"{x:,.0f} un")
-        df_centro['Texto_Valor'] = df_centro['Valor_Limpo'].apply(lambda x: f"R$ {x:,.2f}")
+        fig_centro_qtd.update_traces(
+            marker_color='#4ba3e3',
+            textposition='inside'
+        )
+        fig_centro_qtd.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_title="",
+            yaxis_title="",
+            showlegend=False
+        )
+        st.plotly_chart(fig_centro_qtd, use_container_width=True)
 
-        # Criação das duas colunas lado a lado
-        col_centro1, col_centro2 = st.columns(2)
-
-        # --- Gráfico 1: Perda por Centro (Qtd) ---
-        with col_centro1:
-            st.subheader("📦 Perda por Centro (Qtd)")
-            fig_centro_qtd = px.bar(
-                df_centro,
-                x='Centro_Nome',
-                y='Qtd_Limpa',
-                text='Texto_Qtd',
-                labels={'Qtd_Limpa': 'Quantidade', 'Centro_Nome': ''}
-            )
-            fig_centro_qtd.update_traces(
-                marker_color='#4ba3e3',
-                textposition='inside'
-            )
-            fig_centro_qtd.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis_title="",
-                yaxis_title="",
-                showlegend=False
-            )
-            st.plotly_chart(fig_centro_qtd, use_container_width=True)
-
-        # --- Gráfico 2: Perda por Centro (R$) ---
-        with col_centro2:
-            st.subheader("🎯 Perda por Centro (R$)")
-            fig_centro_val = px.bar(
-                df_centro,
-                x='Centro_Nome',
-                y='Valor_Limpo',
-                text='Texto_Valor',
-                labels={'Valor_Limpo': 'Valor (R$)', 'Centro_Nome': ''}
-            )
-            fig_centro_val.update_traces(
-                marker_color='#4ba3e3',
-                textposition='inside'
-            )
-            fig_centro_val.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis_title="",
-                yaxis_title="",
-                showlegend=False
-            )
-            st.plotly_chart(fig_centro_val, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Erro ao processar dados por Centro: {e}")
+    # --- Gráfico 2: Perda por Centro (R$) ---
+    with col_centro2:
+        st.subheader("🎯 Perda por Centro (R$)")
+        fig_centro_val = px.bar(
+            df_centro,
+            x='Centro_Nome',
+            y='Valor_Limpo',
+            text='Texto_Valor',
+            labels={'Valor_Limpo': 'Valor (R$)', 'Centro_Nome': ''}
+        )
+        fig_centro_val.update_traces(
+            marker_color='#4ba3e3',
+            textposition='inside'
+        )
+        fig_centro_val.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_title="",
+            yaxis_title="",
+            showlegend=False
+        )
+        st.plotly_chart(fig_centro_val, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
         # --- MARCAS (VISÍVEL PARA TODOS OS PERFIS) ---
