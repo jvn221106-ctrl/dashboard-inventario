@@ -385,7 +385,7 @@ def renderizar_dashboard():
 
 df = load_data()
 
-        st.sidebar.title("Filtros")
+st.sidebar.title("Filtros")
 
         if st.sidebar.button("🔄 Atualizar Dados"):
             st.cache_data.clear()
