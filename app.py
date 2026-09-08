@@ -498,37 +498,37 @@ if perfil_usuario == "Administrador":
     st.markdown("<br>", unsafe_allow_html=True)
 
 # --- VISÃO POR CENTRO (TODOS OS PERFIS VÊEM) ---
-        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Gerente"]: 
-            graf_col1, graf_col2 = st.columns(2)
+if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Gerente"]: 
+    graf_col1, graf_col2 = st.columns(2)
 
-            with graf_col1:
-                st.subheader("📦 Perda por Centro (Qtd)")
-                df_qtd_lojas = (
-                    df_filtered[df_filtered['Qtd_Limpa'] < 0]
-                    .groupby('Loja_Nome')['Qtd_Limpa']
-                    .sum()
-                    .abs()
-                    .reset_index()
-                    .sort_values(by='Qtd_Limpa', ascending=False)
-                )
-                df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+        with graf_col1:
+            st.subheader("📦 Perda por Centro (Qtd)")
+            df_qtd_lojas = (
+                df_filtered[df_filtered['Qtd_Limpa'] < 0]
+                .groupby('Loja_Nome')['Qtd_Limpa']
+                .sum()
+                .abs()
+                .reset_index()
+                .sort_values(by='Qtd_Limpa', ascending=False)
+            )
+            df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
 
-                fig_qtd_lojas = px.bar(
-                    df_qtd_lojas,
-                    x='Loja_Nome',
-                    y='Qtd_Limpa',
-                    text='Texto_Qtd',
-                    labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
-                )
-                fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
-                fig_qtd_lojas.update_layout(
-                    template="plotly_dark",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    xaxis_title="",
-                    yaxis_title=""
-                )
-                st.plotly_chart(fig_qtd_lojas, use_container_width=True)
+            fig_qtd_lojas = px.bar(
+                df_qtd_lojas,
+                x='Loja_Nome',
+                y='Qtd_Limpa',
+                text='Texto_Qtd',
+                labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
+            )
+            fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
+            fig_qtd_lojas.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis_title="",
+                yaxis_title=""
+            )
+            st.plotly_chart(fig_qtd_lojas, use_container_width=True)
 
             with graf_col2:
                 st.subheader("🎯 Perda por Centro (R$)")
