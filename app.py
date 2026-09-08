@@ -502,6 +502,8 @@ def renderizar_dashboard():
         )
         df_centro['Texto_Qtd'] = df_centro['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
         df_centro['Texto_Valor'] = df_centro['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
+except Exception as e:
+    st.error(f"Erro ao processar dados por Centro: {e}")
 
         # Criação das duas colunas lado a lado
         col_centro1, col_centro2 = st.columns(2)
@@ -555,8 +557,6 @@ def renderizar_dashboard():
             st.plotly_chart(fig_centro_val, use_container_width=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-except Exception as e:
-    st.error(f"Erro ao processar dados por Centro: {e}")
 
         # --- MARCAS (VISÍVEL PARA TODOS OS PERFIS) ---
         st.markdown("<br>", unsafe_allow_html=True)
