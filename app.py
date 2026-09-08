@@ -446,7 +446,7 @@ def renderizar_dashboard():
         st.markdown("<br>", unsafe_allow_html=True)
 
         # --- VISÃO COMPARATIVA REGIONAL (ADMIN E GERENTES REGIONAIS) ---
-        if perfil_usuario in ["Administrador"]:
+        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
             
             df_reg_comp = (
