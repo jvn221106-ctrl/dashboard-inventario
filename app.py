@@ -511,77 +511,77 @@ if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Gerente"]:
             .reset_index()
             .sort_values(by='Qtd_Limpa', ascending=False)
         )
-            df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+        df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
 
-            fig_qtd_lojas = px.bar(
-                df_qtd_lojas,
-                x='Loja_Nome',
-                y='Qtd_Limpa',
-                text='Texto_Qtd',
-                labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
+        fig_qtd_lojas = px.bar(
+            df_qtd_lojas,
+            x='Loja_Nome',
+            y='Qtd_Limpa',
+            text='Texto_Qtd',
+            labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
+        )
+        fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
+        fig_qtd_lojas.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_title="",
+            yaxis_title=""
+        )
+        st.plotly_chart(fig_qtd_lojas, use_container_width=True)
+
+        with graf_col2:
+            st.subheader("🎯 Perda por Centro (R$)")
+            df_lojas = (
+                df_filtered[df_filtered['Valor_Limpo'] < 0]
+                .groupby('Loja_Nome')['Valor_Limpo']
+                .sum()
+                .abs()
+                .reset_index()
+                .sort_values(by='Valor_Limpo', ascending=False)
             )
-            fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
-            fig_qtd_lojas.update_layout(
+            df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
+
+            fig_lojas = px.bar(
+                df_lojas,
+                x='Loja_Nome',
+                y='Valor_Limpo',
+                text='Texto_Valor',
+                labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
+            )
+            fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
+            fig_lojas.update_layout(
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 xaxis_title="",
                 yaxis_title=""
             )
-            st.plotly_chart(fig_qtd_lojas, use_container_width=True)
+            st.plotly_chart(fig_lojas, use_container_width=True)
 
-            with graf_col2:
-                st.subheader("🎯 Perda por Centro (R$)")
-                df_lojas = (
-                    df_filtered[df_filtered['Valor_Limpo'] < 0]
-                    .groupby('Loja_Nome')['Valor_Limpo']
-                    .sum()
-                    .abs()
-                    .reset_index()
-                    .sort_values(by='Valor_Limpo', ascending=False)
-                )
-                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
 
-                fig_lojas = px.bar(
-                    df_lojas,
-                    x='Loja_Nome',
-                    y='Valor_Limpo',
-                    text='Texto_Valor',
-                    labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
-                )
-                fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
-                fig_lojas.update_layout(
-                    template="plotly_dark",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    xaxis_title="",
-                    yaxis_title=""
-                )
-                st.plotly_chart(fig_lojas, use_container_width=True)
+        df_top10_centros = (
+            df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
+            .groupby(['Loja_Nome', 'Regional_Nome'])
+            .agg({
+                'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
+                'Valor_Limpo': lambda x: abs(x[x < 0].sum())
+            })
+            .reset_index()
+            .sort_values(by='Valor_Limpo', ascending=False)
+            .head(10)
+        )
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
+        df_top10_centros.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_centros))])
+        df_top10_centros = df_top10_centros[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
+        df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
-            df_top10_centros = (
-                df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
-                .groupby(['Loja_Nome', 'Regional_Nome'])
-                .agg({
-                    'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
-                    'Valor_Limpo': lambda x: abs(x[x < 0].sum())
-                })
-                .reset_index()
-                .sort_values(by='Valor_Limpo', ascending=False)
-                .head(10)
-            )
+        df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
+        df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
-            df_top10_centros.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_centros))])
-            df_top10_centros = df_top10_centros[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-            df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
-
-            df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-            df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
-
-            st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
+        st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
 
         # --- MARCAS (VISÍVEL PARA TODOS OS PERFIS) ---
         st.markdown("<br>", unsafe_allow_html=True)
