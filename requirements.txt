@@ -2,6 +2,6 @@ streamlit
 pandas
 plotly
 openpyxl
-kaleido
+kaleido==0.2.1
 Pillow
 fpdf2
