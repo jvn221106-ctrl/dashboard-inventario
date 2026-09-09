@@ -535,7 +535,7 @@ def renderizar_dashboard():
                     .reset_index()
                     .sort_values(by='Valor_Limpo', ascending=False)
                 )
-                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
+                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
 
                 fig_lojas = px.bar(
                     df_lojas,
@@ -574,7 +574,7 @@ def renderizar_dashboard():
             df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
             df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-            df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
+            df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"-R$ {x:,.2f}")
 
             st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
 
@@ -599,7 +599,7 @@ def renderizar_dashboard():
         df_top10_marcas.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
         df_top10_marcas['Perda (Qtd)'] = df_top10_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-        df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
+        df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"-R$ {x:,.2f}")
 
         st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
 
