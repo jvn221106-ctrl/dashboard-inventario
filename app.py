@@ -29,33 +29,48 @@ class PDFReport(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', align='C')
 
 def desenhar_tabela_pdf(pdf, df_tabela, titulo):
-    pdf.set_font("Helvetica", "B", 12)
+    if df_tabela is None or df_tabela.empty:
+        return
+
+    pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(30, 35, 42)
-    pdf.cell(0, 8, titulo, new_x="LMARGIN", new_y="NEXT", align="L")
-    pdf.ln(2)
+    pdf.cell(0, 7, titulo, new_x="LMARGIN", new_y="NEXT", align="L")
+    pdf.ln(1)
 
     colunas = list(df_tabela.columns)
     largura_disponivel = 190
     largura_col = largura_disponivel / len(colunas)
 
-    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(30, 35, 42)
     pdf.set_text_color(255, 255, 255)
     for col in colunas:
-        pdf.cell(largura_col, 7, str(col), border=1, align="C", fill=True)
+        pdf.cell(largura_col, 6, str(col), border=1, align="C", fill=True)
     pdf.ln()
 
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("Helvetica", "", 8)
     pdf.set_text_color(40, 40, 40)
     for idx, row in df_tabela.iterrows():
+        # Quebra de página automática se a tabela for longa
+        if pdf.get_y() > 260:
+            pdf.add_page()
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.set_fill_color(30, 35, 42)
+            pdf.set_text_color(255, 255, 255)
+            for col in colunas:
+                pdf.cell(largura_col, 6, str(col), border=1, align="C", fill=True)
+            pdf.ln()
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(40, 40, 40)
+
         fill = idx % 2 == 0
         pdf.set_fill_color(245, 247, 250) if fill else pdf.set_fill_color(255, 255, 255)
         for col in colunas:
-            pdf.cell(largura_col, 6, str(row[col]), border=1, align="C", fill=True)
+            pdf.cell(largura_col, 5, str(row[col]), border=1, align="C", fill=True)
         pdf.ln()
-    pdf.ln(6)
+    pdf.ln(5)
 
-def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None):
+def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None, df_todos_centros=None, df_todas_marcas=None):
     pdf = PDFReport(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -67,7 +82,7 @@ def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None):
     pdf.ln(2)
 
     largura_card = 44
-    altura_card = 18
+    altura_card = 16
     x_inicial = 10
     y_kpi = pdf.get_y()
 
@@ -76,24 +91,28 @@ def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None):
         pdf.set_fill_color(240, 243, 246)
         pdf.rect(x_pos, y_kpi, largura_card, altura_card, style='F')
         
-        pdf.set_xy(x_pos + 2, y_kpi + 3)
+        pdf.set_xy(x_pos + 2, y_kpi + 2)
         pdf.set_text_color(100, 100, 100)
         pdf.set_font("Helvetica", "", 7)
         pdf.cell(largura_card - 4, 4, str(rotulo), align='L')
         
-        pdf.set_xy(x_pos + 2, y_kpi + 9)
+        pdf.set_xy(x_pos + 2, y_kpi + 8)
         pdf.set_text_color(20, 90, 160)
-        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_font("Helvetica", "B", 9)
         pdf.cell(largura_card - 4, 5, str(valor), align='L')
 
-    pdf.set_y(y_kpi + altura_card + 8)
+    pdf.set_y(y_kpi + altura_card + 6)
 
     # Tabelas executivas
-    if df_top_centros is not None and not df_top_centros.empty:
-        desenhar_tabela_pdf(pdf, df_top_centros, "Top 10 Centros com Maior Perda")
+    desenhar_tabela_pdf(pdf, df_top_centros, "Top 10 Centros com Maior Perda")
+    desenhar_tabela_pdf(pdf, df_top_marcas, "Top 10 Marcas com Maior Perda")
 
-    if df_top_marcas is not None and not df_top_marcas.empty:
-        desenhar_tabela_pdf(pdf, df_top_marcas, "Top 10 Marcas com Maior Perda")
+    # Tabelas completas anexadas ao PDF
+    if df_todos_centros is not None and not df_todos_centros.empty:
+        desenhar_tabela_pdf(pdf, df_todos_centros, "Detalhamento Geral de Perda por Centro")
+
+    if df_todas_marcas is not None and not df_todas_marcas.empty:
+        desenhar_tabela_pdf(pdf, df_todas_marcas, "Detalhamento Geral de Perda por Marca")
 
     return bytes(pdf.output())
 
@@ -249,8 +268,16 @@ def load_data():
 
     df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0)
     df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0)
-    df['Loja_Nome'] = df[col_loja].fillna('S/ Centro').astype(str).str.strip()
-    df['Marca_Nome'] = df[col_marca].fillna('Sem Marca').astype(str).str.strip()
+    
+    # Tratamento para remover Nones/NaNs e textos vazios
+    df['Loja_Nome'] = df[col_loja].astype(str).str.strip()
+    df['Loja_Nome'] = df['Loja_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'S/ Centro')
+    
+    df['Marca_Nome'] = df[col_marca].astype(str).str.strip()
+    df['Marca_Nome'] = df['Marca_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'Sem Marca')
+
+    # Filtrar registros totalmente inválidos se houver
+    df = df[(df['Loja_Nome'] != 'S/ Centro') & (df['Marca_Nome'] != 'Sem Marca')]
 
     def classificar_centro(centro):
         c = str(centro).strip().upper()
@@ -494,7 +521,7 @@ def renderizar_dashboard():
         else:
             regionais_sel = regionais_disponiveis
 
-        lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if str(x).lower() not in ['nan', 'none', '', 'sem loja']]
+        lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
 
         if perfil_usuario == "Administrador":
             lojas_sel = st.sidebar.multiselect(
@@ -545,6 +572,8 @@ def renderizar_dashboard():
 
         df_top10_centros_export = None
         df_top10_marcas_export = None
+        df_todos_centros_export = None
+        df_todas_marcas_export = None
 
         if perfil_usuario == "Administrador":
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
@@ -652,7 +681,8 @@ def renderizar_dashboard():
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
 
-            df_top10_centros = (
+            # Tabela completa de Centros
+            df_centros_completo = (
                 df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
                 .groupby(['Loja_Nome', 'Regional_Nome'])
                 .agg({
@@ -661,23 +691,30 @@ def renderizar_dashboard():
                 })
                 .reset_index()
                 .sort_values(by='Valor_Limpo', ascending=False)
-                .head(10)
             )
 
-            df_top10_centros.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_centros))])
-            df_top10_centros = df_top10_centros[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-            df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
+            df_centros_completo.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_centros_completo))])
+            df_centros_completo = df_centros_completo[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
+            df_centros_completo.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
+            # Top 10
+            df_top10_centros = df_centros_completo.head(10).copy()
             df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
             df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
             st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
             df_top10_centros_export = df_top10_centros.copy()
 
+            # Formatando todos os centros para PDF
+            df_todos_centros_export = df_centros_completo.copy()
+            df_todos_centros_export['Perda (Qtd)'] = df_todos_centros_export['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
+            df_todos_centros_export['Perda (R$)'] = df_todos_centros_export['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
+
         st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("⚠️ Ranking: Top 10 Marcas com Maior Perda")
 
-        df_top10_marcas = (
+        # Tabela completa de Marcas
+        df_marcas_completo = (
             df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
             .groupby('Marca_Nome')
             .agg({
@@ -686,18 +723,24 @@ def renderizar_dashboard():
             })
             .reset_index()
             .sort_values(by='Valor_Limpo', ascending=False)
-            .head(10)
         )
 
-        df_top10_marcas.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_marcas))])
-        df_top10_marcas = df_top10_marcas[['Posição', 'Marca_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-        df_top10_marcas.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
+        df_marcas_completo.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_marcas_completo))])
+        df_marcas_completo = df_marcas_completo[['Posição', 'Marca_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
+        df_marcas_completo.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
+        # Top 10
+        df_top10_marcas = df_marcas_completo.head(10).copy()
         df_top10_marcas['Perda (Qtd)'] = df_top10_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
         df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
         st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
         df_top10_marcas_export = df_top10_marcas.copy()
+
+        # Formatando todas as marcas para PDF
+        df_todas_marcas_export = df_marcas_completo.copy()
+        df_todas_marcas_export['Perda (Qtd)'] = df_todas_marcas_export['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
+        df_todas_marcas_export['Perda (R$)'] = df_todas_marcas_export['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
         st.markdown("<br>", unsafe_allow_html=True)
         marca_col1, marca_col2 = st.columns(2)
@@ -783,7 +826,9 @@ def renderizar_dashboard():
             bytes_pdf = gerar_pdf_dashboard(
                 dic_kpis, 
                 df_top_centros=df_top10_centros_export, 
-                df_top_marcas=df_top10_marcas_export
+                df_top_marcas=df_top10_marcas_export,
+                df_todos_centros=df_todos_centros_export,
+                df_todas_marcas=df_todas_marcas_export
             )
             st.download_button(
                 label="📄 Baixar Relatório Executivo em PDF (.pdf)",
