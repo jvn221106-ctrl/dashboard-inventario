@@ -190,8 +190,36 @@ def formatar_qtd(val):
         return f"{val:,.0f} UN".replace(",", ".")
 
 
-# --- FUNÇÃO PARA COMPILAR VISÃO GERAL EM IMAGEM ---
-def gerar_imagem_dashboard(figuras_lista, kpis_dict):
+# --- DESENHADAR TABELAS NA IMAGEM (PIL) ---
+def desenhar_tabela_pil(draw, df_tabela, titulo, start_x, start_y, largura_max, font_titulo, font_corpo):
+    draw.text((start_x, start_y), titulo, fill="#ffffff", font=font_titulo)
+    y = start_y + 35
+
+    colunas = list(df_tabela.columns)
+    num_cols = len(colunas)
+    largura_col = largura_max // num_cols
+
+    # Cabeçalho
+    draw.rectangle([start_x, y, start_x + largura_max, y + 30], fill="#1e232a", outline="#30363d", width=1)
+    for i, col in enumerate(colunas):
+        cx = start_x + (i * largura_col) + 10
+        draw.text((cx, y + 6), str(col), fill="#4ba3e3", font=font_corpo)
+    y += 30
+
+    # Linhas de dados
+    for idx, row in df_tabela.iterrows():
+        cor_fundo = "#161b22" if idx % 2 == 0 else "#0e1117"
+        draw.rectangle([start_x, y, start_x + largura_max, y + 26], fill=cor_fundo, outline="#21262d", width=1)
+        for i, col in enumerate(colunas):
+            cx = start_x + (i * largura_col) + 10
+            draw.text((cx, y + 5), str(row[col]), fill="#d0d7de", font=font_corpo)
+        y += 26
+
+    return y + 30
+
+
+# --- FUNÇÃO COMPLETA PARA COMPILAR VISÃO GERAL EM IMAGEM ---
+def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_marcas=None):
     imagens_bytes = []
     for fig in figuras_lista:
         img_bytes = fig.to_image(format="png", width=1200, height=500, scale=2)
@@ -200,22 +228,32 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict):
     largura = 1250
     altura_cabecalho = 180
     altura_por_grafico = 520
-    altura_total = altura_cabecalho + (len(imagens_bytes) * altura_por_grafico) + 40
+    
+    altura_tabela_centros = 360 if df_top_centros is not None and not df_top_centros.empty else 0
+    altura_tabela_marcas = 360 if df_top_marcas is not None and not df_top_marcas.empty else 0
+
+    altura_total = altura_cabecalho + (len(imagens_bytes) * altura_por_grafico) + altura_tabela_centros + altura_tabela_marcas + 50
 
     imagem_final = Image.new("RGB", (largura, altura_total), color="#0e1117")
     draw = ImageDraw.Draw(imagem_final)
 
     try:
-        font_titulo = ImageFont.truetype("arial.ttf", 28)
+        font_titulo_gen = ImageFont.truetype("arial.ttf", 28)
+        font_secao = ImageFont.truetype("arial.ttf", 20)
         font_kpi_rotulo = ImageFont.truetype("arial.ttf", 14)
         font_kpi_valor = ImageFont.truetype("arial.ttf", 20)
+        font_tabela = ImageFont.truetype("arial.ttf", 13)
     except IOError:
-        font_titulo = ImageFont.load_default()
+        font_titulo_gen = ImageFont.load_default()
+        font_secao = ImageFont.load_default()
         font_kpi_rotulo = ImageFont.load_default()
         font_kpi_valor = ImageFont.load_default()
+        font_tabela = ImageFont.load_default()
 
-    draw.text((30, 25), "📊 Dashboard Executivo de Inventário - Visão Geral", fill="#ffffff", font=font_titulo)
+    # Cabeçalho
+    draw.text((30, 25), "📊 Dashboard Executivo de Inventário - Visão Geral", fill="#ffffff", font=font_titulo_gen)
 
+    # KPIs
     col_x = 30
     largura_card = 270
     for rotulo, valor in kpis_dict.items():
@@ -225,9 +263,27 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict):
         col_x += largura_card + 20
 
     y_offset = altura_cabecalho
+
+    # Renderizar Gráficos
     for img in imagens_bytes:
         imagem_final.paste(img, (25, y_offset))
         y_offset += altura_por_grafico
+
+    # Renderizar Tabela Top 10 Centros
+    if df_top_centros is not None and not df_top_centros.empty:
+        y_offset = desenhar_tabela_pil(
+            draw, df_top_centros, "🏢 Ranking: Top 10 Centros com Maior Perda", 
+            start_x=30, start_y=y_offset, largura_max=1190, 
+            font_titulo=font_secao, font_corpo=font_tabela
+        )
+
+    # Renderizar Tabela Top 10 Marcas
+    if df_top_marcas is not None and not df_top_marcas.empty:
+        y_offset = desenhar_tabela_pil(
+            draw, df_top_marcas, "⚠️ Ranking: Top 10 Marcas com Maior Perda", 
+            start_x=30, start_y=y_offset, largura_max=1190, 
+            font_titulo=font_secao, font_corpo=font_tabela
+        )
 
     buf = io.BytesIO()
     imagem_final.save(buf, format="PNG")
@@ -498,8 +554,9 @@ def renderizar_dashboard():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Dicionário de gráficos gerados para compilação em imagem
         graficos_gerados = []
+        df_top10_centros_export = None
+        df_top10_marcas_export = None
 
         if perfil_usuario == "Administrador":
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
@@ -542,7 +599,6 @@ def renderizar_dashboard():
             graficos_gerados.append(fig_reg_comp)
             st.markdown("<br>", unsafe_allow_html=True)
 
-        # SEÇÃO VISÍVEL APENAS PARA ADMINISTRADORES E REGIONAIS
         if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]: 
             graf_col1, graf_col2 = st.columns(2)
 
@@ -631,8 +687,8 @@ def renderizar_dashboard():
             df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
             st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
+            df_top10_centros_export = df_top10_centros.copy()
 
-        # SEÇÃO VISÍVEL PARA TODOS OS PERFIS
         st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("⚠️ Ranking: Top 10 Marcas com Maior Perda")
 
@@ -656,6 +712,7 @@ def renderizar_dashboard():
         df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
         st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
+        df_top10_marcas_export = df_top10_marcas.copy()
 
         st.markdown("<br>", unsafe_allow_html=True)
         marca_col1, marca_col2 = st.columns(2)
@@ -728,7 +785,7 @@ def renderizar_dashboard():
             st.plotly_chart(fig_marca_rs, use_container_width=True)
             graficos_gerados.append(fig_marca_rs)
 
-        # --- SEÇÃO DE EXPORTAÇÃO DE IMAGEM DA VISÃO GERAL ---
+        # --- SEÇÃO DE EXPORTAÇÃO COMPLETA DA VISÃO GERAL ---
         st.markdown("---")
         st.subheader("🖼️ Exportação da Visão Geral")
         
@@ -740,11 +797,16 @@ def renderizar_dashboard():
         }
 
         try:
-            bytes_imagem = gerar_imagem_dashboard(graficos_gerados, dic_kpis)
+            bytes_imagem = gerar_imagem_dashboard(
+                graficos_gerados, 
+                dic_kpis, 
+                df_top_centros=df_top10_centros_export, 
+                df_top_marcas=df_top10_marcas_export
+            )
             st.download_button(
                 label="🖼️ Baixar Visão Geral em Imagem (.png)",
                 data=bytes_imagem,
-                file_name="visao_geral_dashboard.png",
+                file_name="visao_geral_dashboard_completa.png",
                 mime="image/png",
                 type="primary"
             )
