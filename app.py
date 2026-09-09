@@ -785,9 +785,9 @@ def renderizar_dashboard():
             st.plotly_chart(fig_marca_rs, use_container_width=True)
             graficos_gerados.append(fig_marca_rs)
 
-        # --- SEÇÃO DE EXPORTAÇÃO COMPLETA DA VISÃO GERAL ---
+# --- SEÇÃO DE EXPORTAÇÃO COMPLETA DA VISÃO GERAL ---
         st.markdown("---")
-        st.subheader("🖼️ Exportação da Visão Geral")
+        st.subheader("📄 Exportação da Visão Geral (PDF)")
         
         dic_kpis = {
             "Total de Perdas": formatar_qtd(perda_total_un),
@@ -797,21 +797,21 @@ def renderizar_dashboard():
         }
 
         try:
-            bytes_imagem = gerar_imagem_dashboard(
+            bytes_pdf = gerar_pdf_dashboard(
                 graficos_gerados, 
                 dic_kpis, 
                 df_top_centros=df_top10_centros_export, 
                 df_top_marcas=df_top10_marcas_export
             )
             st.download_button(
-                label="🖼️ Baixar Visão Geral em Imagem (.png)",
-                data=bytes_imagem,
-                file_name="visao_geral_dashboard_completa.png",
-                mime="image/png",
+                label="📄 Baixar Relatório Completo em PDF (.pdf)",
+                data=bytes_pdf,
+                file_name="visao_geral_dashboard_completa.pdf",
+                mime="application/pdf",
                 type="primary"
             )
         except Exception as err:
-            st.warning("⚠️ Para gerar a imagem compilada, certifique-se de que a biblioteca `kaleido` e a `Pillow` estejam instaladas (`pip install kaleido pillow`).")
+            st.warning(f"⚠️ Erro ao gerar PDF. Verifique se as bibliotecas `fpdf2`, `kaleido` e `Pillow` estão instaladas. Detalhes: {err}")
 
     except Exception as e:
         st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
