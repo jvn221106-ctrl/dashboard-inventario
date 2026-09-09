@@ -10,6 +10,111 @@ import tempfile
 from fpdf import FPDF
 from PIL import Image
 
+# =========================================================
+# DECLARAÇÃO DAS FUNÇÕES DO PDF
+# =========================================================
+
+class PDFReport(FPDF):
+    def header(self):
+        self.set_font('Helvetica', 'B', 14)
+        self.set_text_color(30, 35, 42)
+        self.cell(0, 10, '📊 Relatório Executivo de Inventário', border=False, new_x="LMARGIN", new_y="NEXT", align='L')
+        self.set_font('Helvetica', '', 9)
+        self.set_text_color(100, 100, 100)
+        self.cell(0, 5, 'Visão Geral e Indicadores de Perda', border=False, new_x="LMARGIN", new_y="NEXT", align='L')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Helvetica', 'I', 8)
+        self.set_text_color(128, 128, 128)
+        self.cell(0, 10, f'Página {self.page_no()}', align='C')
+
+def desenhar_tabela_pdf(pdf, df_tabela, titulo):
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(30, 35, 42)
+    pdf.cell(0, 8, titulo, new_x="LMARGIN", new_y="NEXT", align="L")
+    pdf.ln(2)
+
+    colunas = list(df_tabela.columns)
+    largura_disponivel = 190
+    largura_col = largura_disponivel / len(colunas)
+
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(30, 35, 42)
+    pdf.set_text_color(255, 255, 255)
+    for col in colunas:
+        pdf.cell(largura_col, 7, str(col), border=1, align="C", fill=True)
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(40, 40, 40)
+    for idx, row in df_tabela.iterrows():
+        fill = idx % 2 == 0
+        pdf.set_fill_color(245, 247, 250) if fill else pdf.set_fill_color(255, 255, 255)
+        for col in colunas:
+            pdf.cell(largura_col, 6, str(row[col]), border=1, align="C", fill=True)
+        pdf.ln()
+    pdf.ln(6)
+
+def gerar_pdf_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_marcas=None):
+    pdf = PDFReport(orientation='P', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    # Cards de KPIs
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(30, 35, 42)
+    pdf.cell(0, 6, "📌 Resumo dos Indicadores (KPIs)", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    largura_card = 44
+    altura_card = 18
+    x_inicial = 10
+    y_kpi = pdf.get_y()
+
+    for idx, (rotulo, valor) in enumerate(kpis_dict.items()):
+        x_pos = x_inicial + (idx * (largura_card + 3.5))
+        pdf.set_fill_color(240, 243, 246)
+        pdf.rect(x_pos, y_kpi, largura_card, altura_card, style='F')
+        
+        pdf.set_xy(x_pos + 2, y_kpi + 3)
+        pdf.set_text_color(100, 100, 100)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.cell(largura_card - 4, 4, str(rotulo), align='L')
+        
+        pdf.set_xy(x_pos + 2, y_kpi + 9)
+        pdf.set_text_color(20, 90, 160)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(largura_card - 4, 5, str(valor), align='L')
+
+    pdf.set_y(y_kpi + altura_card + 8)
+
+    # Tabelas
+    if df_top_centros is not None and not df_top_centros.empty:
+        desenhar_tabela_pdf(pdf, df_top_centros, "🏢 Top 10 Centros com Maior Perda")
+
+    if df_top_marcas is not None and not df_top_marcas.empty:
+        desenhar_tabela_pdf(pdf, df_top_marcas, "⚠️ Top 10 Marcas com Maior Perda")
+
+    # Gráficos
+    for fig in figuras_lista:
+        pdf.add_page()
+        fig_export = fig.full_figure_for_development(warn=False)
+        fig_export.update_layout(
+            template="plotly_white",
+            width=1000,
+            height=500,
+            paper_bgcolor="white",
+            plot_bgcolor="white"
+        )
+        
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+            fig_export.write_image(tmpfile.name, scale=2)
+            pdf.image(tmpfile.name, x=10, y=30, w=190)
+
+    return bytes(pdf.output())
+
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
     page_title="Dashboard Executivo de Inventário - Vonny Cosméticos",
