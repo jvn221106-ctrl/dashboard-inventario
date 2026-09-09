@@ -35,7 +35,7 @@ URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josu
 DB_FILE = "usuarios_db.json"
 
 # ==============================================================================
-# MAPEAMENTO EXATO DAS REGIONAIS (LISTAS E STRINGS COM VÍRGULA E SEM ESPAÇOS)
+# MAPEAMENTO EXATO DAS REGIONAIS
 # ==============================================================================
 CENTROS_REGIONAL_1 = ["B013", "B015", "B016", "B017", "B019", "B020", "B021", "B022", "B023", "B024", "B025", "B026", "B027", "B028", "B029", "B031", "B032"]
 CENTROS_REGIONAL_2 = ["B001", "B002", "B006", "B007", "B008", "B009", "B010", "B011", "B012", "B018", "B030"]
@@ -162,7 +162,6 @@ def load_data():
     df['Loja_Nome'] = df[col_loja].fillna('S/ Centro').astype(str).str.strip()
     df['Marca_Nome'] = df[col_marca].fillna('Sem Marca').astype(str).str.strip()
 
-    # Mapeamento estático de Regionais baseado nas listas de Centros
     def classificar_centro(centro):
         c = str(centro).strip().upper()
         if c in CENTROS_REGIONAL_1:
@@ -376,320 +375,315 @@ def renderizar_aba_admin():
 
 # --- DASHBOARD VISUAL DE INVENTÁRIO ---
 def renderizar_dashboard():
-    usuarios, _ = carregar_dados_db()
-    email_logado = st.session_state["usuario_atual"]
-    dados_usr = usuarios.get(email_logado, {})
-    
-    loja_usuario = dados_usr.get("loja", "N/A")
-    perfil_usuario = dados_usr.get("perfil", "Gerente")
+    try:
+        usuarios, _ = carregar_dados_db()
+        email_logado = st.session_state["usuario_atual"]
+        dados_usr = usuarios.get(email_logado, {})
+        
+        loja_usuario = dados_usr.get("loja", "N/A")
+        perfil_usuario = dados_usr.get("perfil", "Gerente")
 
+        df = load_data()
 
-df = load_data()
+        st.sidebar.title("Filtros")
 
-st.sidebar.title("Filtros")
+        if st.sidebar.button("🔄 Atualizar Dados"):
+            st.cache_data.clear()
+            st.rerun()
 
-if st.sidebar.button("🔄 Atualizar Dados"):
-    st.cache_data.clear()
-    st.rerun()
+        regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
 
-       # Filtro de Divisões Regionais (Exibido APENAS para Administrador)
-regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
+        if perfil_usuario == "Administrador":
+            regionais_sel = st.sidebar.multiselect(
+                "Selecione a Divisão Regional:", 
+                options=regionais_disponiveis, 
+                default=regionais_disponiveis
+            )
+        elif perfil_usuario in ["Regional 1", "Regional 2"]:
+            regionais_sel = [perfil_usuario]
+        else:
+            regionais_sel = regionais_disponiveis
 
-if perfil_usuario == "Administrador":
-    regionais_sel = st.sidebar.multiselect(
-        "Selecione a Divisão Regional:", 
-        options=regionais_disponiveis, 
-        default=regionais_disponiveis
-    )
-elif perfil_usuario in ["Regional 1", "Regional 2"]:
-    regionais_sel = [perfil_usuario]
-else:
-    regionais_sel = regionais_disponiveis
+        lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if str(x).lower() not in ['nan', 'none', '', 'sem loja']]
 
-# Mapeia as lojas disponíveis com base na regional selecionada
-lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 'sem loja']]
+        if perfil_usuario == "Administrador":
+            lojas_sel = st.sidebar.multiselect(
+                "Selecione os Centros:", 
+                options=lojas_disponiveis, 
+                default=lojas_disponiveis
+            )
+        elif perfil_usuario in ["Regional 1", "Regional 2"]:
+            lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+            lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] if lojas_permitidas_usr else lojas_disponiveis
+            lojas_sel = st.sidebar.multiselect(
+                "Selecione os Centros:", 
+                options=lojas_filtradas_usr, 
+                default=lojas_filtradas_usr
+            )
+        else:
+            lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+            lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr]
+            if not lojas_sel:
+                lojas_sel = lojas_disponiveis
+            st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
 
-# Tratamento de permissões e exibição do filtro de lojas por usuário
-if perfil_usuario == "Administrador":
-    lojas_sel = st.sidebar.multiselect(
-        "Selecione os Centros:", 
-        options=lojas_disponiveis, 
-        default=lojas_disponiveis
-    )
-elif perfil_usuario in ["Regional 1", "Regional 2"]:
-    lojas_permitidas_usr = [x.strip() for x in loja_usuario.replace(" ", ",").split(",") if x.strip()]
-    lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] if lojas_permitidas_usr else lojas_disponiveis
-    lojas_sel = st.sidebar.multiselect(
-        "Selecione os Centros:", 
-        options=lojas_filtradas_usr, 
-        default=lojas_filtradas_usr
-    )
-else:
-    lojas_permitidas_usr = [x.strip() for x in loja_usuario.replace(" ", ",").split(",") if x.strip()]
-    lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr]
-    if not lojas_sel:
-        lojas_sel = lojas_disponiveis
-    st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
+        marcas = [x for x in sorted(df['Marca_Nome'].unique()) if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
+        marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
 
-marcas = [x for x in sorted(df['Marca_Nome'].unique()) if x.lower() not in ['nan', 'none', '', 'sem marca']]
-marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
+        df_filtered = df[
+            (df['Regional_Nome'].isin(regionais_sel)) &
+            (df['Loja_Nome'].isin(lojas_sel)) &
+            (df['Marca_Nome'].isin(marcas_sel))
+        ]
 
-df_filtered = df[
-    (df['Regional_Nome'].isin(regionais_sel)) &
-    (df['Loja_Nome'].isin(lojas_sel)) &
-    (df['Marca_Nome'].isin(marcas_sel))
-]
+        st.title("📊 Dashboard Executivo de Inventário")
+        st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
+        st.markdown("---")
 
-st.title("📊 Dashboard Executivo de Inventário")
-st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
-st.markdown("---")
+        perda_total_rs = df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum()
+        perda_total_un = df_filtered[df_filtered['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum()
+        sobra_total_rs = df_filtered[df_filtered['Valor_Limpo'] > 0]['Valor_Limpo'].sum()
+        resultado_net = sobra_total_rs + perda_total_rs
 
-perda_total_rs = df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum()
-perda_total_un = df_filtered[df_filtered['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum()
-sobra_total_rs = df_filtered[df_filtered['Valor_Limpo'] > 0]['Valor_Limpo'].sum()
-resultado_net = sobra_total_rs + perda_total_rs
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1.metric("Total de Perdas (Qtd)", formatar_qtd(perda_total_un))
+        kpi2.metric("Perda Total (R$)", formatar_moeda(perda_total_rs))
+        kpi3.metric("Sobras / Ajustes (+)", formatar_moeda(sobra_total_rs))
+        kpi4.metric("Resultado Net (Caixa)", formatar_moeda(resultado_net))
 
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-kpi1.metric("Total de Perdas (Qtd)", formatar_qtd(perda_total_un))
-kpi2.metric("Perda Total (R$)", formatar_moeda(perda_total_rs))
-kpi3.metric("Sobras / Ajustes (+)", formatar_moeda(sobra_total_rs))
-kpi4.metric("Resultado Net (Caixa)", formatar_moeda(resultado_net))
+        st.markdown("<br>", unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
+        if perfil_usuario == "Administrador":
+            st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
 
-# --- VISÃO COMPARATIVA REGIONAL (APENAS ADMINISTRADOR) ---
-if perfil_usuario == "Administrador":
-    st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
-
-    df_reg_comp = (
-        df_filtered[df_filtered['Valor_Limpo'] < 0]
-        .groupby('Regional_Nome')
-        .agg({
-            'Qtd_Limpa': lambda x: abs(x.sum()),
-            'Valor_Limpo': lambda x: abs(x.sum())
-        })
-        .reset_index()
-        .sort_values(by='Valor_Limpo', ascending=False)
-    )
-    df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
-
-    fig_reg_comp = px.bar(
-        df_reg_comp,
-        x='Regional_Nome',
-        y='Valor_Limpo',
-        text='Texto_Valor',
-        color='Regional_Nome',
-        color_discrete_map={
-            'Regional 1': '#4ba3e3',
-            'Regional 2': '#ff7f0e',
-        },
-        labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
-    )
-    fig_reg_comp.update_traces(textposition='inside')
-    fig_reg_comp.update_layout(
-        template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis_title="",
-        yaxis_title="",
-        showlegend=False
-    )
-    st.plotly_chart(fig_reg_comp, use_container_width=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-
-# --- VISÃO POR CENTRO (TODOS OS PERFIS VÊEM) ---
-if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Gerente"]: 
-    graf_col1, graf_col2 = st.columns(2)
-
-    with graf_col1:
-        st.subheader("📦 Perda por Centro (Qtd)")
-        df_qtd_lojas = (
-            df_filtered[df_filtered['Qtd_Limpa'] < 0]
-            .groupby('Loja_Nome')['Qtd_Limpa']
-            .sum()
-            .abs()
-            .reset_index()
-            .sort_values(by='Qtd_Limpa', ascending=False)
-        )
-        df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-
-        fig_qtd_lojas = px.bar(
-            df_qtd_lojas,
-            x='Loja_Nome',
-            y='Qtd_Limpa',
-            text='Texto_Qtd',
-            labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
-        )
-        fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
-        fig_qtd_lojas.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis_title="",
-            yaxis_title=""
-        )
-        st.plotly_chart(fig_qtd_lojas, use_container_width=True)
-
-        with graf_col2:
-            st.subheader("🎯 Perda por Centro (R$)")
-            df_lojas = (
+            df_reg_comp = (
                 df_filtered[df_filtered['Valor_Limpo'] < 0]
-                .groupby('Loja_Nome')['Valor_Limpo']
-                .sum()
-                .abs()
+                .groupby('Regional_Nome')
+                .agg({
+                    'Qtd_Limpa': lambda x: abs(x.sum()),
+                    'Valor_Limpo': lambda x: abs(x.sum())
+                })
                 .reset_index()
                 .sort_values(by='Valor_Limpo', ascending=False)
             )
-            df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
+            df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
 
-            fig_lojas = px.bar(
-                df_lojas,
-                x='Loja_Nome',
+            fig_reg_comp = px.bar(
+                df_reg_comp,
+                x='Regional_Nome',
                 y='Valor_Limpo',
                 text='Texto_Valor',
-                labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
+                color='Regional_Nome',
+                color_discrete_map={
+                    'Regional 1': '#4ba3e3',
+                    'Regional 2': '#ff7f0e',
+                },
+                labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
             )
-            fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
-            fig_lojas.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis_title="",
-                yaxis_title=""
-            )
-            st.plotly_chart(fig_lojas, use_container_width=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
-
-        df_top10_centros = (
-            df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
-            .groupby(['Loja_Nome', 'Regional_Nome'])
-            .agg({
-                'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
-                'Valor_Limpo': lambda x: abs(x[x < 0].sum())
-            })
-            .reset_index()
-            .sort_values(by='Valor_Limpo', ascending=False)
-            .head(10)
-        )
-
-        df_top10_centros.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_centros))])
-        df_top10_centros = df_top10_centros[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-        df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
-
-        df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-        df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
-
-        st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
-
-        # --- MARCAS (VISÍVEL PARA TODOS OS PERFIS) ---
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.subheader("⚠️ Ranking: Top 10 Marcas com Maior Perda")
-
-        df_top10_marcas = (
-            df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
-            .groupby('Marca_Nome')
-            .agg({
-                'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
-                'Valor_Limpo': lambda x: abs(x[x < 0].sum())
-            })
-            .reset_index()
-            .sort_values(by='Valor_Limpo', ascending=False)
-            .head(10)
-        )
-
-        df_top10_marcas.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_marcas))])
-        df_top10_marcas = df_top10_marcas[['Posição', 'Marca_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-        df_top10_marcas.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
-
-        df_top10_marcas['Perda (Qtd)'] = df_top10_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-        df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
-
-        st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        marca_col1, marca_col2 = st.columns(2)
-
-        df_perdas_marcas = df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
-
-        with marca_col1:
-            st.subheader("📦 Perdas por Marca - Todas (Qtd)")
-            df_marca_qtd = (
-                df_perdas_marcas[df_perdas_marcas['Qtd_Limpa'] < 0]
-                .groupby('Marca_Nome')['Qtd_Limpa']
-                .sum()
-                .abs()
-                .reset_index()
-                .sort_values(by='Qtd_Limpa', ascending=False)
-            )
-            df_marca_qtd['Texto_Qtd'] = df_marca_qtd['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-
-            fig_marca_qtd = px.line(
-                df_marca_qtd,
-                x='Marca_Nome',
-                y='Qtd_Limpa',
-                text='Texto_Qtd',
-                markers=True,
-                labels={'Qtd_Limpa': 'Perda (Qtd)', 'Marca_Nome': 'Marca'}
-            )
-            fig_marca_qtd.update_traces(line_color='#ff7f0e', line_width=3, marker_size=7, textposition='top center')
-            fig_marca_qtd.update_layout(
+            fig_reg_comp.update_traces(textposition='inside')
+            fig_reg_comp.update_layout(
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 xaxis_title="",
                 yaxis_title="",
-                xaxis_tickangle=-45
+                showlegend=False
             )
-            st.plotly_chart(fig_marca_qtd, use_container_width=True)
+            st.plotly_chart(fig_reg_comp, use_container_width=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
-        with marca_col2:
-            st.subheader("🏷️ Perdas por Marca - Todas (R$)")
-            df_marca_rs = (
-                df_perdas_marcas[df_perdas_marcas['Valor_Limpo'] < 0]
-                .groupby('Marca_Nome')['Valor_Limpo']
-                .sum()
-                .abs()
+        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Gerente"]: 
+            graf_col1, graf_col2 = st.columns(2)
+
+            with graf_col1:
+                st.subheader("📦 Perda por Centro (Qtd)")
+                df_qtd_lojas = (
+                    df_filtered[df_filtered['Qtd_Limpa'] < 0]
+                    .groupby('Loja_Nome')['Qtd_Limpa']
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by='Qtd_Limpa', ascending=False)
+                )
+                df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+
+                fig_qtd_lojas = px.bar(
+                    df_qtd_lojas,
+                    x='Loja_Nome',
+                    y='Qtd_Limpa',
+                    text='Texto_Qtd',
+                    labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
+                )
+                fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
+                fig_qtd_lojas.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis_title="",
+                    yaxis_title=""
+                )
+                st.plotly_chart(fig_qtd_lojas, use_container_width=True)
+
+            with graf_col2:
+                st.subheader("🎯 Perda por Centro (R$)")
+                df_lojas = (
+                    df_filtered[df_filtered['Valor_Limpo'] < 0]
+                    .groupby('Loja_Nome')['Valor_Limpo']
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by='Valor_Limpo', ascending=False)
+                )
+                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
+
+                fig_lojas = px.bar(
+                    df_lojas,
+                    x='Loja_Nome',
+                    y='Valor_Limpo',
+                    text='Texto_Valor',
+                    labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
+                )
+                fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
+                fig_lojas.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis_title="",
+                    yaxis_title=""
+                )
+                st.plotly_chart(fig_lojas, use_container_width=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
+
+            df_top10_centros = (
+                df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
+                .groupby(['Loja_Nome', 'Regional_Nome'])
+                .agg({
+                    'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
+                    'Valor_Limpo': lambda x: abs(x[x < 0].sum())
+                })
                 .reset_index()
                 .sort_values(by='Valor_Limpo', ascending=False)
+                .head(10)
             )
-            df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-{x:,.0f}")
 
-            fig_marca_rs = px.line(
-                df_marca_rs,
-                x='Marca_Nome',
-                y='Valor_Limpo',
-                text='Texto_RS',
-                markers=True,
-                labels={'Valor_Limpo': 'Perda (R$)', 'Marca_Nome': 'Marca'}
+            df_top10_centros.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_centros))])
+            df_top10_centros = df_top10_centros[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
+            df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
+
+            df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
+            df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
+
+            st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("⚠️ Ranking: Top 10 Marcas com Maior Perda")
+
+            df_top10_marcas = (
+                df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
+                .groupby('Marca_Nome')
+                .agg({
+                    'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
+                    'Valor_Limpo': lambda x: abs(x[x < 0].sum())
+                })
+                .reset_index()
+                .sort_values(by='Valor_Limpo', ascending=False)
+                .head(10)
             )
-            fig_marca_rs.update_traces(line_color='#4ba3e3', line_width=3, marker_size=7, textposition='top center')
-            fig_marca_rs.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis_title="",
-                yaxis_title="",
-                xaxis_tickangle=-45
+
+            df_top10_marcas.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_marcas))])
+            df_top10_marcas = df_top10_marcas[['Posição', 'Marca_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
+            df_top10_marcas.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
+
+            df_top10_marcas['Perda (Qtd)'] = df_top10_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
+            df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
+
+            st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            marca_col1, marca_col2 = st.columns(2)
+
+            df_perdas_marcas = df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
+
+            with marca_col1:
+                st.subheader("📦 Perdas por Marca - Todas (Qtd)")
+                df_marca_qtd = (
+                    df_perdas_marcas[df_perdas_marcas['Qtd_Limpa'] < 0]
+                    .groupby('Marca_Nome')['Qtd_Limpa']
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by='Qtd_Limpa', ascending=False)
+                )
+                df_marca_qtd['Texto_Qtd'] = df_marca_qtd['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+
+                fig_marca_qtd = px.line(
+                    df_marca_qtd,
+                    x='Marca_Nome',
+                    y='Qtd_Limpa',
+                    text='Texto_Qtd',
+                    markers=True,
+                    labels={'Qtd_Limpa': 'Perda (Qtd)', 'Marca_Nome': 'Marca'}
+                )
+                fig_marca_qtd.update_traces(line_color='#ff7f0e', line_width=3, marker_size=7, textposition='top center')
+                fig_marca_qtd.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis_title="",
+                    yaxis_title="",
+                    xaxis_tickangle=-45
+                )
+                st.plotly_chart(fig_marca_qtd, use_container_width=True)
+
+            with marca_col2:
+                st.subheader("🏷️ Perdas por Marca - Todas (R$)")
+                df_marca_rs = (
+                    df_perdas_marcas[df_perdas_marcas['Valor_Limpo'] < 0]
+                    .groupby('Marca_Nome')['Valor_Limpo']
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by='Valor_Limpo', ascending=False)
+                )
+                df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-{x:,.0f}")
+
+                fig_marca_rs = px.line(
+                    df_marca_rs,
+                    x='Marca_Nome',
+                    y='Valor_Limpo',
+                    text='Texto_RS',
+                    markers=True,
+                    labels={'Valor_Limpo': 'Perda (R$)', 'Marca_Nome': 'Marca'}
+                )
+                fig_marca_rs.update_traces(line_color='#4ba3e3', line_width=3, marker_size=7, textposition='top center')
+                fig_marca_rs.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis_title="",
+                    yaxis_title="",
+                    xaxis_tickangle=-45
+                )
+                st.plotly_chart(fig_marca_rs, use_container_width=True)
+
+            st.markdown("---")
+            st.subheader("📥 Exportação de Dados Filtrados")
+            
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_filtered.to_excel(writer, index=False, sheet_name="Inventario_Filtrado")
+            processed_data = output.getvalue()
+
+            st.download_button(
+                label="📄 Baixar Relatório em Excel (.xlsx)",
+                data=processed_data,
+                file_name="relatorio_inventario_filtrado.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            st.plotly_chart(fig_marca_rs, use_container_width=True)
 
-        st.markdown("---")
-        st.subheader("📥 Exportação de Dados Filtrados")
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_filtered.to_excel(writer, index=False, sheet_name="Inventario_Filtrado")
-        processed_data = output.getvalue()
-
-        st.download_button(
-            label="📄 Baixar Relatório em Excel (.xlsx)",
-            data=processed_data,
-            file_name="relatorio_inventario_filtrado.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
+    except Exception as e:
         st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
 
 
