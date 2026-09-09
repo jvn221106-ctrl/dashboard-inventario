@@ -190,7 +190,7 @@ def formatar_qtd(val):
         return f"{val:,.0f} UN".replace(",", ".")
 
 
-# --- DESENHAR TABELAS NA IMAGEM (PIL) ---
+# --- DESENHADAR TABELAS NA IMAGEM (PIL) ---
 def desenhar_tabela_pil(draw, df_tabela, titulo, start_x, start_y, largura_max, font_titulo, font_corpo):
     draw.text((start_x, start_y), titulo, fill="#ffffff", font=font_titulo)
     y = start_y + 35
@@ -222,32 +222,27 @@ def desenhar_tabela_pil(draw, df_tabela, titulo, start_x, start_y, largura_max, 
 def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_marcas=None):
     imagens_bytes = []
     for fig in figuras_lista:
-        fig_temp = fig.full_figure_for_development(warn=False)
-        fig_temp.update_layout(width=1190, height=450, margin=dict(l=40, r=40, t=50, b=50))
-        img_bytes = fig_temp.to_image(format="png", width=1190, height=450, scale=2)
+        img_bytes = fig.to_image(format="png", width=1200, height=500, scale=2)
         imagens_bytes.append(Image.open(io.BytesIO(img_bytes)))
 
     largura = 1250
     altura_cabecalho = 180
-    altura_por_grafico = 460
+    altura_por_grafico = 520
     
-    num_linhas_centros = len(df_top_centros) if df_top_centros is not None else 0
-    altura_tabela_centros = (60 + (num_linhas_centros * 28) + 40) if num_linhas_centros > 0 else 0
+    altura_tabela_centros = 360 if df_top_centros is not None and not df_top_centros.empty else 0
+    altura_tabela_marcas = 360 if df_top_marcas is not None and not df_top_marcas.empty else 0
 
-    num_linhas_marcas = len(df_top_marcas) if df_top_marcas is not None else 0
-    altura_tabela_marcas = (60 + (num_linhas_marcas * 28) + 40) if num_linhas_marcas > 0 else 0
-
-    altura_total = altura_cabecalho + (len(imagens_bytes) * altura_por_grafico) + altura_tabela_centros + altura_tabela_marcas + 80
+    altura_total = altura_cabecalho + (len(imagens_bytes) * altura_por_grafico) + altura_tabela_centros + altura_tabela_marcas + 50
 
     imagem_final = Image.new("RGB", (largura, altura_total), color="#0e1117")
     draw = ImageDraw.Draw(imagem_final)
 
     try:
-        font_titulo_gen = ImageFont.truetype("arial.ttf", 26)
+        font_titulo_gen = ImageFont.truetype("arial.ttf", 28)
         font_secao = ImageFont.truetype("arial.ttf", 20)
-        font_kpi_rotulo = ImageFont.truetype("arial.ttf", 13)
-        font_kpi_valor = ImageFont.truetype("arial.ttf", 18)
-        font_tabela = ImageFont.truetype("arial.ttf", 12)
+        font_kpi_rotulo = ImageFont.truetype("arial.ttf", 14)
+        font_kpi_valor = ImageFont.truetype("arial.ttf", 20)
+        font_tabela = ImageFont.truetype("arial.ttf", 13)
     except IOError:
         font_titulo_gen = ImageFont.load_default()
         font_secao = ImageFont.load_default()
@@ -271,7 +266,7 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
 
     # Renderizar Gráficos
     for img in imagens_bytes:
-        imagem_final.paste(img, (30, y_offset))
+        imagem_final.paste(img, (25, y_offset))
         y_offset += altura_por_grafico
 
     # Renderizar Tabela Top 10 Centros
@@ -294,349 +289,583 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
     imagem_final.save(buf, format="PNG")
     return buf.getvalue()
 
-    # ==============================================================================
-# INTERFACE DE USUÁRIO - TELAS
-# ==============================================================================
 
-def renderizar_troca_senha_obrigatoria(usuarios_db, email_usuario, removidos_set):
-    st.title("🔒 Alteração de Senha Obrigatória")
-    st.warning("É necessário redefinir sua senha no primeiro acesso para garantir a segurança da conta.")
+# --- GERENCIAMENTO DE SESSÃO ---
+if "logado" not in st.session_state:
+    st.session_state["logado"] = False
+if "usuario_atual" not in st.session_state:
+    st.session_state["usuario_atual"] = None
+if "troca_obrigatoria" not in st.session_state:
+    st.session_state["troca_obrigatoria"] = False
+
+
+# --- TELA DE LOGIN ---
+def renderizar_tela_login():
+    st.title("🔒 Vonny Cosméticos - Acesso ao Sistema")
+    st.write("Digite seu e-mail corporativo para acessar os indicadores.")
+
+    usuarios, removidos = carregar_dados_db()
+
+    with st.form("form_login"):
+        email_input = st.text_input("E-mail corporativo:").strip().lower()
+        senha_input = st.text_input("Senha:", type="password")
+        btn_entrar = st.form_submit_button("Entrar", type="primary")
+
+    if btn_entrar:
+        if not email_input:
+            st.error("Por favor, digite seu e-mail.")
+            return
+
+        if email_input in removidos or email_input not in usuarios:
+            st.error("E-mail não autorizado ou acesso revogado. Entre em contato com o administrador.")
+            return
+
+        dados_usuario = usuarios[email_input]
+
+        if dados_usuario["senha"] is None:
+            if not senha_input or len(senha_input) < 6:
+                st.warning("⚠️ **Primeiro Acesso:** Defina uma senha de no mínimo 6 caracteres e clique em entrar novamente.")
+            else:
+                usuarios[email_input]["senha"] = gerar_hash(senha_input)
+                usuarios[email_input]["forcar_redefinicao"] = False
+                salvar_dados_db(usuarios, removidos)
+                st.session_state["logado"] = True
+                st.session_state["usuario_atual"] = email_input
+                st.success("🎉 Primeiro acesso realizado! Entrando...")
+                st.rerun()
+        else:
+            if gerar_hash(senha_input) == dados_usuario["senha"]:
+                st.session_state["logado"] = True
+                st.session_state["usuario_atual"] = email_input
+                
+                if dados_usuario.get("forcar_redefinicao", False):
+                    st.session_state["troca_obrigatoria"] = True
+                
+                st.success("Login efetuado!")
+                st.rerun()
+            else:
+                st.error("Senha incorreta.")
+
+    st.markdown("---")
+    with st.expander("❓ Esqueceu a senha?"):
+        st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinicao de senha.")
+
+
+# --- TELA OBRIGATÓRIA DE REDEFINIÇÃO DE SENHA ---
+def renderizar_tela_troca_obrigatoria():
+    st.title("🔑 Redefinição de Senha Obrigatória")
+    st.warning("Você acessou com uma **senha temporária**. Escolha uma nova senha definitiva para continuar.")
+
+    usuarios, removidos = carregar_dados_db()
+    email_logado = st.session_state["usuario_atual"]
 
     with st.form("form_troca_obrigatoria"):
-        nova_senha = st.text_input("Nova Senha", type="password")
-        confirma_senha = st.text_input("Confirme a Nova Senha", type="password")
-        btn_salvar = st.form_submit_button("Salvar e Acessar Dashboard")
+        nova_senha = st.text_input("Nova Senha (mínimo 6 caracteres):", type="password")
+        confirma_nova = st.text_input("Confirme a Nova Senha:", type="password")
+        btn_salvar = st.form_submit_button("Salvar Nova Senha", type="primary")
 
-        if btn_salvar:
-            if not nova_senha:
-                st.error("A senha não pode estar em branco.")
-            elif nova_senha != confirma_senha:
-                st.error("As senhas digitadas não coincidem!")
-            else:
-                usuarios_db[email_usuario]["senha"] = gerar_hash(nova_senha)
-                usuarios_db[email_usuario]["forcar_redefinicao"] = False
-                salvar_dados_db(usuarios_db, removidos_set)
-                st.session_state["forcar_redefinicao"] = False
-                st.success("Senha cadastrada com sucesso!")
-                st.rerun()
+    if btn_salvar:
+        if len(nova_senha) < 6:
+            st.error("A nova senha deve ter no mínimo 6 caracteres.")
+            return
 
+        if nova_senha != confirma_nova:
+            st.error("As senhas não coincidem.")
+            return
 
-def renderizar_gestao_usuarios(usuarios_db, email_admin, removidos_set):
-    st.header("👥 Painel de Gestão de Usuários")
-    st.info("Cadastre novos usuários, redefina senhas ou remova permissões de acesso.")
+        usuarios[email_logado]["senha"] = gerar_hash(nova_senha)
+        usuarios[email_logado]["forcar_redefinicao"] = False
+        salvar_dados_db(usuarios, removidos)
 
-    # 1. Formulário para Adicionar / Editar Usuário
-    st.subheader("➕ Adicionar / Modificar Usuário")
-    with st.form("form_novo_usuario"):
-        col1, col2, col3 = st.columns([3, 2, 2])
-        with col1:
-            novo_email = st.text_input("E-mail corporativo").strip().lower()
-        with col2:
-            novo_perfil = st.selectbox("Perfil de Acesso", OPCOES_PERFIL)
-        with col3:
-            nova_loja = st.text_input("Lojas/Centros (ex: B001 ou B001,B002)").strip()
-
-        btn_cadastrar = st.form_submit_button("Salvar Usuário")
-
-        if btn_cadastrar:
-            if not novo_email:
-                st.error("Por favor, digite o e-mail.")
-            else:
-                loja_final = "TODAS" if novo_perfil == "Administrador" else (nova_loja if nova_loja else "TODAS")
-                
-                if novo_email in removidos_set:
-                    removidos_set.remove(novo_email)
-
-                usuarios_db[novo_email] = {
-                    "loja": loja_final,
-                    "perfil": novo_perfil,
-                    "senha": None,
-                    "forcar_redefinicao": True
-                }
-                salvar_dados_db(usuarios_db, removidos_set)
-                st.success(f"Usuário {novo_email} salvo com sucesso!")
-                st.rerun()
-
-    st.markdown("---")
-
-    # 2. Tabela de Usuários Existentes
-    st.subheader("📋 Usuários Cadastrados")
-    
-    for email, dados in list(usuarios_db.items()):
-        with st.expander(f"✉️ {email} - [{dados.get('perfil', 'Gerente')}] - Lojas: {dados.get('loja', 'N/A')}"):
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.write(f"**Perfil:** {dados.get('perfil', 'Gerente')}")
-                st.write(f"**Lojas Vinculadas:** {dados.get('loja', 'N/A')}")
-                st.write(f"**Status da Senha:** {'Cadastrada' if dados.get('senha') else 'Pendente (Primeiro Acesso)'}")
-            with col_b:
-                if st.button(f"🔄 Redefinir Senha", key=f"reset_{email}"):
-                    dados["senha"] = None
-                    dados["forcar_redefinicao"] = True
-                    salvar_dados_db(usuarios_db, removidos_set)
-                    st.success(f"Senha de {email} redefinida. O usuário deverá criar uma nova senha no próximo acesso.")
-                    st.rerun()
-
-                if email != email_admin:
-                    if st.button(f"🗑️ Remover Usuário", key=f"del_{email}"):
-                        del usuarios_db[email]
-                        removidos_set.add(email)
-                        salvar_dados_db(usuarios_db, removidos_set)
-                        st.warning(f"Usuário {email} removido.")
-                        st.rerun()
-
-
-def renderizar_dashboard(df_raw, perfil_usuario, lojas_permitidas_str):
-    st.sidebar.markdown("---")
-    st.sidebar.title("🔍 Filtros Dinâmicos")
-
-    # Tratamento das lojas permitidas pelo perfil
-    lojas_permitidas = [l.strip().upper() for l in lojas_permitidas_str.split(",")] if lojas_permitidas_str != "TODAS" else []
-
-    # Filtrar dataframe por acesso
-    if perfil_usuario in ["Administrador", "Controle"]:
-        df_filtrado = df_raw.copy()
-    else:
-        df_filtrado = df_raw[df_raw['Loja_Nome'].str.upper().isin(lojas_permitidas)].copy()
-
-    # Filtro de Regional na Sidebar
-    regionais_disponiveis = sorted(df_filtrado['Regional_Nome'].dropna().unique().tolist())
-    sel_regional = st.sidebar.multiselect("Regional", options=regionais_disponiveis, default=regionais_disponiveis)
-    if sel_regional:
-        df_filtrado = df_filtrado[df_filtrado['Regional_Nome'].isin(sel_regional)]
-
-    # Filtro de Centro/Loja na Sidebar
-    centros_disponiveis = sorted(df_filtrado['Loja_Nome'].dropna().unique().tolist())
-    sel_centro = st.sidebar.multiselect("Centro / Loja", options=centros_disponiveis, default=centros_disponiveis)
-    if sel_centro:
-        df_filtrado = df_filtrado[df_filtrado['Loja_Nome'].isin(sel_centro)]
-
-    # Filtro de Marca na Sidebar
-    marcas_disponiveis = sorted(df_filtrado['Marca_Nome'].dropna().unique().tolist())
-    sel_marca = st.sidebar.multiselect("Marca / Fornecedor", options=marcas_disponiveis)
-    if sel_marca:
-        df_filtrado = df_filtrado[df_filtrado['Marca_Nome'].isin(sel_marca)]
-
-    st.title("📊 Dashboard Executivo de Inventário")
-    st.markdown("---")
-
-    # Cálculo dos KPIs Globais
-    total_perdas_qtd = df_filtrado[df_filtrado['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum()
-    total_perdas_rs = df_filtrado[df_filtrado['Valor_Limpo'] < 0]['Valor_Limpo'].sum()
-    total_sobras_rs = df_filtrado[df_filtrado['Valor_Limpo'] > 0]['Valor_Limpo'].sum()
-    resultado_net_rs = df_filtrado['Valor_Limpo'].sum()
-
-    kpis_dict = {
-        "Total de Perdas (Qtd)": formatar_qtd(total_perdas_qtd),
-        "Perda Total (R$)": formatar_moeda(total_perdas_rs),
-        "Sobras / Ajustes (R$)": formatar_moeda(total_sobras_rs),
-        "Resultado Net (R$)": formatar_moeda(resultado_net_rs)
-    }
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total de Perdas", formatar_qtd(total_perdas_qtd))
-    c2.metric("Perda Total (R$)", formatar_moeda(total_perdas_rs))
-    c3.metric("Sobras / Ajustes", formatar_moeda(total_sobras_rs))
-    c4.metric("Resultado Net", formatar_moeda(resultado_net_rs))
-
-    st.markdown("---")
-
-    # --------------------------------------------------------------------------
-    # CONSTRUÇÃO DOS GRÁFICOS
-    # --------------------------------------------------------------------------
-    figuras_exportacao = []
-
-    # 1. Comparativo por Divisão Regional
-    df_reg = df_filtrado.groupby('Regional_Nome')['Valor_Limpo'].sum().reset_index()
-    fig_reg = px.bar(
-        df_reg, x='Regional_Nome', y='Valor_Limpo',
-        title="Comparativo por Divisão Regional",
-        labels={'Regional_Nome': 'Regional', 'Valor_Limpo': 'Valor Net (R$)'},
-        color_discrete_sequence=['#ff7f0e'], text_auto=True
-    )
-    fig_reg.update_layout(template="plotly_dark", height=400)
-    st.plotly_chart(fig_reg, use_container_width=True)
-    figuras_exportacao.append(fig_reg)
-
-    # 2. Perda por Centro (Qtd)
-    df_centro_qtd = df_filtrado[df_filtrado['Qtd_Limpa'] < 0].groupby('Loja_Nome')['Qtd_Limpa'].sum().reset_index().sort_values('Qtd_Limpa')
-    fig_centro_qtd = px.bar(
-        df_centro_qtd, x='Loja_Nome', y='Qtd_Limpa',
-        title="Perda por Centro (Qtd)",
-        labels={'Loja_Nome': 'Centro', 'Qtd_Limpa': 'Perda (Qtd)'},
-        color_discrete_sequence=['#1f77b4'], text_auto=True
-    )
-    fig_centro_qtd.update_layout(template="plotly_dark", height=400)
-    st.plotly_chart(fig_centro_qtd, use_container_width=True)
-    figuras_exportacao.append(fig_centro_qtd)
-
-    # 3. Perda por Centro (R$)
-    df_centro_rs = df_filtrado[df_filtrado['Valor_Limpo'] < 0].groupby('Loja_Nome')['Valor_Limpo'].sum().reset_index().sort_values('Valor_Limpo')
-    fig_centro_rs = px.bar(
-        df_centro_rs, x='Loja_Nome', y='Valor_Limpo',
-        title="Perda por Centro (R$)",
-        labels={'Loja_Nome': 'Centro', 'Valor_Limpo': 'Perda (R$)'},
-        color_discrete_sequence=['#1f77b4'], text_auto=True
-    )
-    fig_centro_rs.update_layout(template="plotly_dark", height=400)
-    st.plotly_chart(fig_centro_rs, use_container_width=True)
-    figuras_exportacao.append(fig_centro_rs)
-
-    # 4. Perdas por Marca - Qtd
-    df_marca_qtd = df_filtrado[df_filtrado['Qtd_Limpa'] < 0].groupby('Marca_Nome')['Qtd_Limpa'].sum().reset_index().sort_values('Qtd_Limpa').head(15)
-    fig_marca_qtd = px.line(
-        df_marca_qtd, x='Marca_Nome', y='Qtd_Limpa', markers=True,
-        title="Perdas por Marca - Top 15 (Qtd)",
-        labels={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)'},
-        color_discrete_sequence=['#ff7f0e'], text_auto=True
-    )
-    fig_marca_qtd.update_layout(template="plotly_dark", height=400)
-    st.plotly_chart(fig_marca_qtd, use_container_width=True)
-    figuras_exportacao.append(fig_marca_qtd)
-
-    # 5. Perdas por Marca - R$
-    df_marca_rs = df_filtrado[df_filtrado['Valor_Limpo'] < 0].groupby('Marca_Nome')['Valor_Limpo'].sum().reset_index().sort_values('Valor_Limpo').head(15)
-    fig_marca_rs = px.line(
-        df_marca_rs, x='Marca_Nome', y='Valor_Limpo', markers=True,
-        title="Perdas por Marca - Top 15 (R$)",
-        labels={'Marca_Nome': 'Marca', 'Valor_Limpo': 'Perda (R$)'},
-        color_discrete_sequence=['#1f77b4'], text_auto=True
-    )
-    fig_marca_rs.update_layout(template="plotly_dark", height=400)
-    st.plotly_chart(fig_marca_rs, use_container_width=True)
-    figuras_exportacao.append(fig_marca_rs)
-
-    st.markdown("---")
-
-    # --------------------------------------------------------------------------
-    # TABELAS RANKING TOP 10
-    # --------------------------------------------------------------------------
-    col_t1, col_t2 = st.columns(2)
-
-    with col_t1:
-        st.subheader("🏢 Top 10 Centros com Maior Perda")
-        df_top_c = df_filtrado[df_filtrado['Valor_Limpo'] < 0].groupby(['Loja_Nome', 'Regional_Nome']).agg(
-            Perda_Qtd=('Qtd_Limpa', 'sum'),
-            Perda_RS=('Valor_Limpo', 'sum')
-        ).reset_index().sort_values('Perda_RS').head(10)
-
-        df_top_c_exibicao = df_top_c.copy()
-        df_top_c_exibicao['Perda_Qtd'] = df_top_c_exibicao['Perda_Qtd'].apply(formatar_qtd)
-        df_top_c_exibicao['Perda_RS'] = df_top_c_exibicao['Perda_RS'].apply(formatar_moeda)
-        df_top_c_exibicao.columns = ['Centro', 'Divisão Regional', 'Perda (Qtd)', 'Perda (R$)']
-        st.dataframe(df_top_c_exibicao, use_container_width=True, hide_index=True)
-
-    with col_t2:
-        st.subheader("⚠️ Top 10 Marcas com Maior Perda")
-        df_top_m = df_filtrado[df_filtrado['Valor_Limpo'] < 0].groupby('Marca_Nome').agg(
-            Perda_Qtd=('Qtd_Limpa', 'sum'),
-            Perda_RS=('Valor_Limpo', 'sum')
-        ).reset_index().sort_values('Perda_RS').head(10)
-
-        df_top_m_exibicao = df_top_m.copy()
-        df_top_m_exibicao['Perda_Qtd'] = df_top_m_exibicao['Perda_Qtd'].apply(formatar_qtd)
-        df_top_m_exibicao['Perda_RS'] = df_top_m_exibicao['Perda_RS'].apply(formatar_moeda)
-        df_top_m_exibicao.columns = ['Marca', 'Perda (Qtd)', 'Perda (R$)']
-        st.dataframe(df_top_m_exibicao, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-
-    # Botão de Exportação de Imagem do Dashboard Completo
-    st.subheader("📸 Exportar Visão Geral")
-    if st.button("🖼️ Gerar Imagem da Visão Geral (.png)"):
-        with st.spinner("Gerando imagem em alta resolução sem cortes..."):
-            img_bytes = gerar_imagem_dashboard(
-                figuras_lista=figuras_exportacao,
-                kpis_dict=kpis_dict,
-                df_top_centros=df_top_c_exibicao,
-                df_top_marcas=df_top_m_exibicao
-            )
-            st.download_button(
-                label="⬇️ Baixar Imagem do Dashboard (.png)",
-                data=img_bytes,
-                file_name="visao_geral_dashboard_completa.png",
-                mime="image/png"
-            )
-
-
-# ==============================================================================
-# FLUXO PRINCIPAL DA APLICAÇÃO (MAIN)
-# ==============================================================================
-def main():
-    usuarios_db, removidos_set = carregar_dados_db()
-
-    if "usuario_logado" not in st.session_state:
-        st.session_state["usuario_logado"] = None
-
-    # TELA DE LOGIN
-    if st.session_state["usuario_logado"] is None:
-        st.title("🔐 Acesso ao Dashboard de Inventário")
-        st.markdown("---")
-        
-        with st.form("form_login"):
-            email_input = st.text_input("E-mail corporativo").strip().lower()
-            senha_input = st.text_input("Senha", type="password")
-            btn_entrar = st.form_submit_button("Entrar")
-
-            if btn_entrar:
-                if email_input in usuarios_db:
-                    user_data = usuarios_db[email_input]
-                    senha_salva = user_data.get("senha")
-
-                    # Caso 1: Primeiro acesso (sem senha definida)
-                    if senha_salva is None:
-                        st.session_state["usuario_logado"] = email_input
-                        st.session_state["forcar_redefinicao"] = True
-                        st.rerun()
-
-                    # Caso 2: Validação da senha digitada
-                    elif senha_salva == gerar_hash(senha_input):
-                        st.session_state["usuario_logado"] = email_input
-                        st.session_state["forcar_redefinicao"] = user_data.get("forcar_redefinicao", False)
-                        st.rerun()
-                    else:
-                        st.error("Senha incorreta.")
-                else:
-                    st.error("E-mail não cadastrado ou sem permissão de acesso.")
-        return
-
-    # SESSÃO ATIVA
-    usuario_atual = st.session_state["usuario_logado"]
-    dados_user = usuarios_db.get(usuario_atual, {})
-    perfil_act = dados_user.get("perfil", "Gerente")
-    lojas_act = dados_user.get("loja", "")
-
-    # Barra lateral de navegação do usuário
-    st.sidebar.write(f"👤 **Usuário:** {usuario_atual}")
-    st.sidebar.write(f"🔰 **Perfil:** {perfil_act}")
-    
-    if st.sidebar.button("🚪 Sair (Logout)"):
-        st.session_state["usuario_logado"] = None
-        st.session_state["forcar_redefinicao"] = False
+        st.session_state["troca_obrigatoria"] = False
+        st.success("✅ Senha atualizada com sucesso!")
         st.rerun()
 
-    # Redirecionamento obrigatório caso exija redefinição de senha
-    if st.session_state.get("forcar_redefinicao", False):
-        renderizar_troca_senha_obrigatoria(usuarios_db, usuario_atual, removidos_set)
-        return
 
-    # Navegação por abas
-    if perfil_act == "Administrador":
-        aba1, aba2 = st.tabs(["📊 Dashboard Executivo", "👥 Gestão de Usuários"])
-        with aba1:
-            try:
-                df = load_data()
-                renderizar_dashboard(df, perfil_act, lojas_act)
-            except Exception as e:
-                st.error(f"Erro ao carregar dados da nuvem: {e}")
-        with aba2:
-            renderizar_gestao_usuarios(usuarios_db, usuario_atual, removidos_set)
-    else:
+# --- ABA PAINEL ADMIN ---
+def renderizar_aba_admin():
+    st.header("⚙️ Painel do Administrador")
+    usuarios, removidos = carregar_dados_db()
+
+    st.subheader("👥 Lista de Usuários e Status")
+    dados_tabela = []
+    for email, dados in usuarios.items():
+        dados_tabela.append({
+            "E-mail": email,
+            "Loja / Centro": dados.get("loja", "N/A"),
+            "Perfil / Cargo": dados.get("perfil", "Gerente"),
+            "Primeiro Acesso": "✅ Concluído" if dados.get("senha") else "⏳ Pendente",
+            "Senha Temporária Ativa": "⚠️ Sim" if dados.get("forcar_redefinicao") else "Não"
+        })
+    st.dataframe(dados_tabela, use_container_width=True)
+
+    st.markdown("---")
+
+    st.subheader("➕ Adicionar ou Editar Usuário")
+    col_add1, col_add2, col_add3, col_add4 = st.columns([2, 2, 1, 1])
+    with col_add1:
+        novo_email = st.text_input("E-mail corporativo:", key="input_novo_email").strip().lower()
+    with col_add2:
+        nova_loja = st.text_input("Centro (Ex: B001,B002 ou TODAS):", key="input_nova_loja").strip().upper()
+    with col_add3:
+        novo_perfil = st.selectbox("Perfil / Cargo:", options=OPCOES_PERFIL, key="select_novo_perfil")
+    with col_add4:
+        st.write("##")
+        if st.button("Salvar Usuário", type="primary"):
+            if not novo_email or "@" not in novo_email:
+                st.error("Por favor, digite um e-mail válido.")
+            elif not nova_loja:
+                st.error("Por favor, informe a loja / centro.")
+            else:
+                if novo_email in removidos:
+                    removidos.remove(novo_email)
+
+                if novo_email in usuarios:
+                    usuarios[novo_email]["loja"] = nova_loja
+                    usuarios[novo_email]["perfil"] = novo_perfil
+                    st.success(f"✅ Usuário **{novo_email}** atualizado!")
+                else:
+                    usuarios[novo_email] = {
+                        "loja": nova_loja,
+                        "perfil": novo_perfil,
+                        "senha": None,
+                        "forcar_redefinicao": False
+                    }
+                    st.success(f"🎉 Usuário **{novo_email}** cadastrado!")
+                
+                salvar_dados_db(usuarios, removidos)
+                st.rerun()
+
+    st.markdown("---")
+
+    st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        usuario_selecionado = st.selectbox("Selecione o e-mail:", options=list(usuarios.keys()), key="select_reset_senha")
+        senha_temp = st.text_input("Senha Temporária:", type="password", key="input_senha_temp")
+
+    with col2:
+        st.write("##")
+        if st.button("Definir Senha Temporária"):
+            if not senha_temp or len(senha_temp) < 6:
+                st.error("A senha deve ter pelo menos 6 caracteres.")
+            else:
+                usuarios[usuario_selecionado]["senha"] = gerar_hash(senha_temp)
+                usuarios[usuario_selecionado]["forcar_redefinicao"] = True
+                salvar_dados_db(usuarios, removidos)
+                st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
+
+    st.markdown("---")
+
+    st.subheader("🗑️ Remover Usuário Permanentemente")
+    col_del1, col_del2 = st.columns([2, 1])
+    with col_del1:
+        user_para_deletar = st.selectbox("Selecione para remover:", options=list(usuarios.keys()), key="select_del_user")
+    with col_del2:
+        st.write("##")
+        if st.button("Remover Usuário", type="secondary"):
+            if user_para_deletar == st.session_state["usuario_atual"]:
+                st.error("Você não pode remover seu próprio usuário logado.")
+            else:
+                del usuarios[user_para_deletar]
+                removidos.add(user_para_deletar)
+                salvar_dados_db(usuarios, removidos)
+                st.success(f"🗑️ Usuário **{user_para_deletar}** removido permanentemente!")
+                st.rerun()
+
+
+# --- DASHBOARD VISUAL DE INVENTÁRIO ---
+def renderizar_dashboard():
+    try:
+        usuarios, _ = carregar_dados_db()
+        email_logado = st.session_state["usuario_atual"]
+        dados_usr = usuarios.get(email_logado, {})
+        
+        loja_usuario = dados_usr.get("loja", "N/A")
+        perfil_usuario = dados_usr.get("perfil", "Gerente")
+
+        df = load_data()
+
+        st.sidebar.title("Filtros")
+
+        if st.sidebar.button("🔄 Atualizar Dados"):
+            st.cache_data.clear()
+            st.rerun()
+
+        regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
+
+        if perfil_usuario == "Administrador":
+            regionais_sel = st.sidebar.multiselect(
+                "Selecione a Divisão Regional:", 
+                options=regionais_disponiveis, 
+                default=regionais_disponiveis
+            )
+        elif perfil_usuario in ["Regional 1", "Regional 2"]:
+            regionais_sel = [perfil_usuario]
+        else:
+            regionais_sel = regionais_disponiveis
+
+        lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if str(x).lower() not in ['nan', 'none', '', 'sem loja']]
+
+        if perfil_usuario == "Administrador":
+            lojas_sel = st.sidebar.multiselect(
+                "Selecione os Centros:", 
+                options=lojas_disponiveis, 
+                default=lojas_disponiveis
+            )
+        elif perfil_usuario in ["Regional 1", "Regional 2"]:
+            lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+            lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] if lojas_permitidas_usr else lojas_disponiveis
+            lojas_sel = st.sidebar.multiselect(
+                "Selecione os Centros:", 
+                options=lojas_filtradas_usr, 
+                default=lojas_filtradas_usr
+            )
+        else:
+            lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+            lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr]
+            if not lojas_sel:
+                lojas_sel = lojas_disponiveis
+            st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
+
+        marcas = [x for x in sorted(df['Marca_Nome'].unique()) if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
+        marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
+
+        df_filtered = df[
+            (df['Regional_Nome'].isin(regionais_sel)) &
+            (df['Loja_Nome'].isin(lojas_sel)) &
+            (df['Marca_Nome'].isin(marcas_sel))
+        ]
+
+        st.title("📊 Dashboard Executivo de Inventário")
+        st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
+        st.markdown("---")
+
+        perda_total_rs = df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum()
+        perda_total_un = df_filtered[df_filtered['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum()
+        sobra_total_rs = df_filtered[df_filtered['Valor_Limpo'] > 0]['Valor_Limpo'].sum()
+        resultado_net = sobra_total_rs + perda_total_rs
+
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1.metric("Total de Perdas (Qtd)", formatar_qtd(perda_total_un))
+        kpi2.metric("Perda Total (R$)", formatar_moeda(perda_total_rs))
+        kpi3.metric("Sobras / Ajustes (+)", formatar_moeda(sobra_total_rs))
+        kpi4.metric("Resultado Net (Caixa)", formatar_moeda(resultado_net))
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        graficos_gerados = []
+        df_top10_centros_export = None
+        df_top10_marcas_export = None
+
+        if perfil_usuario == "Administrador":
+            st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
+
+            df_reg_comp = (
+                df_filtered[df_filtered['Valor_Limpo'] < 0]
+                .groupby('Regional_Nome')
+                .agg({
+                    'Qtd_Limpa': lambda x: abs(x.sum()),
+                    'Valor_Limpo': lambda x: abs(x.sum())
+                })
+                .reset_index()
+                .sort_values(by='Valor_Limpo', ascending=False)
+            )
+            df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
+
+            fig_reg_comp = px.bar(
+                df_reg_comp,
+                x='Regional_Nome',
+                y='Valor_Limpo',
+                text='Texto_Valor',
+                color='Regional_Nome',
+                title="Comparativo por Divisão Regional",
+                color_discrete_map={
+                    'Regional 1': '#4ba3e3',
+                    'Regional 2': '#ff7f0e',
+                },
+                labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
+            )
+            fig_reg_comp.update_traces(textposition='inside')
+            fig_reg_comp.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis_title="",
+                yaxis_title="",
+                showlegend=False
+            )
+            st.plotly_chart(fig_reg_comp, use_container_width=True)
+            graficos_gerados.append(fig_reg_comp)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]: 
+            graf_col1, graf_col2 = st.columns(2)
+
+            with graf_col1:
+                st.subheader("📦 Perda por Centro (Qtd)")
+                df_qtd_lojas = (
+                    df_filtered[df_filtered['Qtd_Limpa'] < 0]
+                    .groupby('Loja_Nome')['Qtd_Limpa']
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by='Qtd_Limpa', ascending=False)
+                )
+                df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+
+                fig_qtd_lojas = px.bar(
+                    df_qtd_lojas,
+                    x='Loja_Nome',
+                    y='Qtd_Limpa',
+                    text='Texto_Qtd',
+                    title="Perda por Centro (Qtd)",
+                    labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
+                )
+                fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
+                fig_qtd_lojas.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis_title="",
+                    yaxis_title=""
+                )
+                st.plotly_chart(fig_qtd_lojas, use_container_width=True)
+                graficos_gerados.append(fig_qtd_lojas)
+
+            with graf_col2:
+                st.subheader("🎯 Perda por Centro (R$)")
+                df_lojas = (
+                    df_filtered[df_filtered['Valor_Limpo'] < 0]
+                    .groupby('Loja_Nome')['Valor_Limpo']
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by='Valor_Limpo', ascending=False)
+                )
+                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
+
+                fig_lojas = px.bar(
+                    df_lojas,
+                    x='Loja_Nome',
+                    y='Valor_Limpo',
+                    text='Texto_Valor',
+                    title="Perda por Centro (R$)",
+                    labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
+                )
+                fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
+                fig_lojas.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis_title="",
+                    yaxis_title=""
+                )
+                st.plotly_chart(fig_lojas, use_container_width=True)
+                graficos_gerados.append(fig_lojas)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
+
+            df_top10_centros = (
+                df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
+                .groupby(['Loja_Nome', 'Regional_Nome'])
+                .agg({
+                    'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
+                    'Valor_Limpo': lambda x: abs(x[x < 0].sum())
+                })
+                .reset_index()
+                .sort_values(by='Valor_Limpo', ascending=False)
+                .head(10)
+            )
+
+            df_top10_centros.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_centros))])
+            df_top10_centros = df_top10_centros[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
+            df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
+
+            df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
+            df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
+
+            st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
+            df_top10_centros_export = df_top10_centros.copy()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("⚠️ Ranking: Top 10 Marcas com Maior Perda")
+
+        df_top10_marcas = (
+            df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
+            .groupby('Marca_Nome')
+            .agg({
+                'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
+                'Valor_Limpo': lambda x: abs(x[x < 0].sum())
+            })
+            .reset_index()
+            .sort_values(by='Valor_Limpo', ascending=False)
+            .head(10)
+        )
+
+        df_top10_marcas.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_top10_marcas))])
+        df_top10_marcas = df_top10_marcas[['Posição', 'Marca_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
+        df_top10_marcas.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
+
+        df_top10_marcas['Perda (Qtd)'] = df_top10_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
+        df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
+
+        st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
+        df_top10_marcas_export = df_top10_marcas.copy()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        marca_col1, marca_col2 = st.columns(2)
+
+        df_perdas_marcas = df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
+
+        with marca_col1:
+            st.subheader("📦 Perdas por Marca - Todas (Qtd)")
+            df_marca_qtd = (
+                df_perdas_marcas[df_perdas_marcas['Qtd_Limpa'] < 0]
+                .groupby('Marca_Nome')['Qtd_Limpa']
+                .sum()
+                .abs()
+                .reset_index()
+                .sort_values(by='Qtd_Limpa', ascending=False)
+            )
+            df_marca_qtd['Texto_Qtd'] = df_marca_qtd['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+
+            fig_marca_qtd = px.line(
+                df_marca_qtd,
+                x='Marca_Nome',
+                y='Qtd_Limpa',
+                text='Texto_Qtd',
+                markers=True,
+                title="Perdas por Marca - Todas (Qtd)",
+                labels={'Qtd_Limpa': 'Perda (Qtd)', 'Marca_Nome': 'Marca'}
+            )
+            fig_marca_qtd.update_traces(line_color='#ff7f0e', line_width=3, marker_size=7, textposition='top center')
+            fig_marca_qtd.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis_title="",
+                yaxis_title="",
+                xaxis_tickangle=-45
+            )
+            st.plotly_chart(fig_marca_qtd, use_container_width=True)
+            graficos_gerados.append(fig_marca_qtd)
+
+        with marca_col2:
+            st.subheader("🏷️ Perdas por Marca - Todas (R$)")
+            df_marca_rs = (
+                df_perdas_marcas[df_perdas_marcas['Valor_Limpo'] < 0]
+                .groupby('Marca_Nome')['Valor_Limpo']
+                .sum()
+                .abs()
+                .reset_index()
+                .sort_values(by='Valor_Limpo', ascending=False)
+            )
+            df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-{x:,.0f}")
+
+            fig_marca_rs = px.line(
+                df_marca_rs,
+                x='Marca_Nome',
+                y='Valor_Limpo',
+                text='Texto_RS',
+                markers=True,
+                title="Perdas por Marca - Todas (R$)",
+                labels={'Valor_Limpo': 'Perda (R$)', 'Marca_Nome': 'Marca'}
+            )
+            fig_marca_rs.update_traces(line_color='#4ba3e3', line_width=3, marker_size=7, textposition='top center')
+            fig_marca_rs.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis_title="",
+                yaxis_title="",
+                xaxis_tickangle=-45
+            )
+            st.plotly_chart(fig_marca_rs, use_container_width=True)
+            graficos_gerados.append(fig_marca_rs)
+
+        # --- SEÇÃO DE EXPORTAÇÃO COMPLETA DA VISÃO GERAL ---
+        st.markdown("---")
+        st.subheader("🖼️ Exportação da Visão Geral")
+        
+        dic_kpis = {
+            "Total de Perdas": formatar_qtd(perda_total_un),
+            "Perda Total (R$)": formatar_moeda(perda_total_rs),
+            "Sobras / Ajustes": formatar_moeda(sobra_total_rs),
+            "Resultado Net": formatar_moeda(resultado_net)
+        }
+
         try:
-            df = load_data()
-            renderizar_dashboard(df, perfil_act, lojas_act)
-        except Exception as e:
-            st.error(f"Erro ao carregar dados da nuvem: {e}")
+            bytes_imagem = gerar_imagem_dashboard(
+                graficos_gerados, 
+                dic_kpis, 
+                df_top_centros=df_top10_centros_export, 
+                df_top_marcas=df_top10_marcas_export
+            )
+            st.download_button(
+                label="🖼️ Baixar Visão Geral em Imagem (.png)",
+                data=bytes_imagem,
+                file_name="visao_geral_dashboard_completa.png",
+                mime="image/png",
+                type="primary"
+            )
+        except Exception as err:
+            st.warning("⚠️ Para gerar a imagem compilada, certifique-se de que a biblioteca `kaleido` e a `Pillow` estejam instaladas (`pip install kaleido pillow`).")
 
-if __name__ == "__main__":
-    main()
+    except Exception as e:
+        st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
+
+
+# --- FLUXO PRINCIPAL DA APLICAÇÃO ---
+if not st.session_state["logado"]:
+    renderizar_tela_login()
+
+elif st.session_state["troca_obrigatoria"]:
+    renderizar_tela_troca_obrigatoria()
+
+else:
+    usuarios_db, _ = carregar_dados_db()
+    usr_atual = st.session_state["usuario_atual"]
+    dados_logado = usuarios_db.get(usr_atual, {})
+
+    st.sidebar.markdown(f"👤 **Usuário:** `{usr_atual}`\n\n💼 **Cargo:** `{dados_logado.get('perfil', 'Gerente')}`")
+    
+    with st.sidebar.expander("🔑 Alterar minha senha"):
+        with st.form("form_mudar_senha_sidebar"):
+            senha_antiga_sb = st.text_input("Senha Atual:", type="password")
+            nova_senha_sb = st.text_input("Nova Senha:", type="password")
+            confirma_sb = st.text_input("Confirme a Nova Senha:", type="password")
+            btn_mudar_sb = st.form_submit_button("Atualizar Senha")
+
+            if btn_mudar_sb:
+                usuarios_dict, removidos_set = carregar_dados_db()
+                
+                if gerar_hash(senha_antiga_sb) != usuarios_dict[usr_atual]["senha"]:
+                    st.error("Senha atual incorreta.")
+                elif len(nova_senha_sb) < 6:
+                    st.error("Mínimo de 6 caracteres.")
+                elif nova_senha_sb != confirma_sb:
+                    st.error("Senhas não conferem.")
+                else:
+                    usuarios_dict[usr_atual]["senha"] = gerar_hash(nova_senha_sb)
+                    usuarios_dict[usr_atual]["forcar_redefinicao"] = False
+                    salvar_dados_db(usuarios_dict, removidos_set)
+                    st.success("✅ Senha alterada com sucesso!")
+
+    if st.sidebar.button("🚪 Sair / Logout"):
+        st.session_state["logado"] = False
+        st.session_state["usuario_atual"] = None
+        st.session_state["troca_obrigatoria"] = False
+        st.rerun()
+
+    perfil_logado = dados_logado.get("perfil", "Gerente")
+
+    if perfil_logado == "Administrador":
+        aba_dash, aba_admin = st.tabs(["📊 Dashboard Geral", "⚙️ Painel Admin"])
+        with aba_dash:
+            renderizar_dashboard()
+        with aba_admin:
+            renderizar_aba_admin()
+    else:
+        renderizar_dashboard()
