@@ -8,7 +8,7 @@ import requests
 import io
 import tempfile
 from fpdf import FPDF
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 # =========================================================
 # DECLARAÇÃO DAS FUNÇÕES DO PDF
@@ -18,10 +18,10 @@ class PDFReport(FPDF):
     def header(self):
         self.set_font('Helvetica', 'B', 14)
         self.set_text_color(30, 35, 42)
-        self.cell(0, 10, '📊 Relatório Executivo de Inventário', border=False, new_x="LMARGIN", new_y="NEXT", align='L')
+        self.cell(0, 10, 'Relatorio Executivo de Inventario', border=False, new_x="LMARGIN", new_y="NEXT", align='L')
         self.set_font('Helvetica', '', 9)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 5, 'Visão Geral e Indicadores de Perda', border=False, new_x="LMARGIN", new_y="NEXT", align='L')
+        self.cell(0, 5, 'Visao Geral e Indicadores de Perda', border=False, new_x="LMARGIN", new_y="NEXT", align='L')
         self.ln(5)
 
     def footer(self):
@@ -65,7 +65,7 @@ def gerar_pdf_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_ma
     # Cards de KPIs
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(30, 35, 42)
-    pdf.cell(0, 6, "📌 Resumo dos Indicadores (KPIs)", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, "Resumo dos Indicadores (KPIs)", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
 
     largura_card = 44
@@ -92,10 +92,10 @@ def gerar_pdf_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_ma
 
     # Tabelas
     if df_top_centros is not None and not df_top_centros.empty:
-        desenhar_tabela_pdf(pdf, df_top_centros, "🏢 Top 10 Centros com Maior Perda")
+        desenhar_tabela_pdf(pdf, df_top_centros, "Top 10 Centros com Maior Perda")
 
     if df_top_marcas is not None and not df_top_marcas.empty:
-        desenhar_tabela_pdf(pdf, df_top_marcas, "⚠️ Top 10 Marcas com Maior Perda")
+        desenhar_tabela_pdf(pdf, df_top_marcas, "Top 10 Marcas com Maior Perda")
 
     # Gráficos
     for fig in figuras_lista:
@@ -297,7 +297,7 @@ def formatar_qtd(val):
         return f"{val:,.0f} UN".replace(",", ".")
 
 
-# --- DESENHADAR TABELAS NA IMAGEM (PIL) ---
+# --- DESENHAR TABELAS NA IMAGEM (PIL) ---
 def desenhar_tabela_pil(draw, df_tabela, titulo, start_x, start_y, largura_max, font_titulo, font_corpo):
     draw.text((start_x, start_y), titulo, fill="#ffffff", font=font_titulo)
     y = start_y + 35
@@ -358,7 +358,7 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
         font_tabela = ImageFont.load_default()
 
     # Cabeçalho
-    draw.text((30, 25), "📊 Dashboard Executivo de Inventário - Visão Geral", fill="#ffffff", font=font_titulo_gen)
+    draw.text((30, 25), "Dashboard Executivo de Inventário - Visão Geral", fill="#ffffff", font=font_titulo_gen)
 
     # KPIs
     col_x = 30
@@ -379,7 +379,7 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
     # Renderizar Tabela Top 10 Centros
     if df_top_centros is not None and not df_top_centros.empty:
         y_offset = desenhar_tabela_pil(
-            draw, df_top_centros, "🏢 Ranking: Top 10 Centros com Maior Perda", 
+            draw, df_top_centros, "Ranking: Top 10 Centros com Maior Perda", 
             start_x=30, start_y=y_offset, largura_max=1190, 
             font_titulo=font_secao, font_corpo=font_tabela
         )
@@ -387,7 +387,7 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
     # Renderizar Tabela Top 10 Marcas
     if df_top_marcas is not None and not df_top_marcas.empty:
         y_offset = desenhar_tabela_pil(
-            draw, df_top_marcas, "⚠️ Ranking: Top 10 Marcas com Maior Perda", 
+            draw, df_top_marcas, "Ranking: Top 10 Marcas com Maior Perda", 
             start_x=30, start_y=y_offset, largura_max=1190, 
             font_titulo=font_secao, font_corpo=font_tabela
         )
@@ -892,7 +892,7 @@ def renderizar_dashboard():
             st.plotly_chart(fig_marca_rs, use_container_width=True)
             graficos_gerados.append(fig_marca_rs)
 
-# --- SEÇÃO DE EXPORTAÇÃO COMPLETA DA VISÃO GERAL ---
+        # --- SEÇÃO DE EXPORTAÇÃO COMPLETA DA VISÃO GERAL ---
         st.markdown("---")
         st.subheader("📄 Exportação da Visão Geral (PDF)")
         
