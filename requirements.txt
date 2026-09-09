@@ -2,6 +2,5 @@ streamlit
 pandas
 plotly
 openpyxl
-Pillow
 fpdf2
-matplotlib
+requests

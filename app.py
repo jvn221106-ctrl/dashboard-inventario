@@ -6,12 +6,10 @@ import os
 import hashlib
 import requests
 import io
-import tempfile
 from fpdf import FPDF
-from PIL import Image, ImageDraw, ImageFont
 
 # =========================================================
-# DECLARAÇÃO DAS FUNÇÕES DO PDF
+# DECLARAÇÃO DAS FUNÇÕES DO PDF (SEM DEPENDÊNCIA DE KALEIDO)
 # =========================================================
 
 class PDFReport(FPDF):
@@ -57,7 +55,7 @@ def desenhar_tabela_pdf(pdf, df_tabela, titulo):
         pdf.ln()
     pdf.ln(6)
 
-def gerar_pdf_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_marcas=None):
+def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None):
     pdf = PDFReport(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -90,28 +88,12 @@ def gerar_pdf_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_ma
 
     pdf.set_y(y_kpi + altura_card + 8)
 
-    # Tabelas
+    # Tabelas executivas
     if df_top_centros is not None and not df_top_centros.empty:
         desenhar_tabela_pdf(pdf, df_top_centros, "Top 10 Centros com Maior Perda")
 
     if df_top_marcas is not None and not df_top_marcas.empty:
         desenhar_tabela_pdf(pdf, df_top_marcas, "Top 10 Marcas com Maior Perda")
-
-    # Gráficos
-    for fig in figuras_lista:
-        pdf.add_page()
-        fig_export = fig.full_figure_for_development(warn=False)
-        fig_export.update_layout(
-            template="plotly_white",
-            width=1000,
-            height=500,
-            paper_bgcolor="white",
-            plot_bgcolor="white"
-        )
-        
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-            fig_export.write_image(tmpfile.name, scale=2)
-            pdf.image(tmpfile.name, x=10, y=30, w=190)
 
     return bytes(pdf.output())
 
@@ -295,106 +277,6 @@ def formatar_qtd(val):
         return f"-{abs(val):,.0f} UN".replace(",", ".")
     else:
         return f"{val:,.0f} UN".replace(",", ".")
-
-
-# --- DESENHAR TABELAS NA IMAGEM (PIL) ---
-def desenhar_tabela_pil(draw, df_tabela, titulo, start_x, start_y, largura_max, font_titulo, font_corpo):
-    draw.text((start_x, start_y), titulo, fill="#ffffff", font=font_titulo)
-    y = start_y + 35
-
-    colunas = list(df_tabela.columns)
-    num_cols = len(colunas)
-    largura_col = largura_max // num_cols
-
-    # Cabeçalho
-    draw.rectangle([start_x, y, start_x + largura_max, y + 30], fill="#1e232a", outline="#30363d", width=1)
-    for i, col in enumerate(colunas):
-        cx = start_x + (i * largura_col) + 10
-        draw.text((cx, y + 6), str(col), fill="#4ba3e3", font=font_corpo)
-    y += 30
-
-    # Linhas de dados
-    for idx, row in df_tabela.iterrows():
-        cor_fundo = "#161b22" if idx % 2 == 0 else "#0e1117"
-        draw.rectangle([start_x, y, start_x + largura_max, y + 26], fill=cor_fundo, outline="#21262d", width=1)
-        for i, col in enumerate(colunas):
-            cx = start_x + (i * largura_col) + 10
-            draw.text((cx, y + 5), str(row[col]), fill="#d0d7de", font=font_corpo)
-        y += 26
-
-    return y + 30
-
-
-# --- FUNÇÃO COMPLETA PARA COMPILAR VISÃO GERAL EM IMAGEM ---
-def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_marcas=None):
-    imagens_bytes = []
-    for fig in figuras_lista:
-        img_bytes = fig.to_image(format="png", width=1200, height=500, scale=2)
-        imagens_bytes.append(Image.open(io.BytesIO(img_bytes)))
-
-    largura = 1250
-    altura_cabecalho = 180
-    altura_por_grafico = 520
-    
-    altura_tabela_centros = 360 if df_top_centros is not None and not df_top_centros.empty else 0
-    altura_tabela_marcas = 360 if df_top_marcas is not None and not df_top_marcas.empty else 0
-
-    altura_total = altura_cabecalho + (len(imagens_bytes) * altura_por_grafico) + altura_tabela_centros + altura_tabela_marcas + 50
-
-    imagem_final = Image.new("RGB", (largura, altura_total), color="#0e1117")
-    draw = ImageDraw.Draw(imagem_final)
-
-    try:
-        font_titulo_gen = ImageFont.truetype("arial.ttf", 28)
-        font_secao = ImageFont.truetype("arial.ttf", 20)
-        font_kpi_rotulo = ImageFont.truetype("arial.ttf", 14)
-        font_kpi_valor = ImageFont.truetype("arial.ttf", 20)
-        font_tabela = ImageFont.truetype("arial.ttf", 13)
-    except IOError:
-        font_titulo_gen = ImageFont.load_default()
-        font_secao = ImageFont.load_default()
-        font_kpi_rotulo = ImageFont.load_default()
-        font_kpi_valor = ImageFont.load_default()
-        font_tabela = ImageFont.load_default()
-
-    # Cabeçalho
-    draw.text((30, 25), "Dashboard Executivo de Inventário - Visão Geral", fill="#ffffff", font=font_titulo_gen)
-
-    # KPIs
-    col_x = 30
-    largura_card = 270
-    for rotulo, valor in kpis_dict.items():
-        draw.rectangle([col_x, 80, col_x + largura_card, 150], fill="#1e232a", outline="#30363d", width=1)
-        draw.text((col_x + 15, 90), rotulo, fill="#a3a8b2", font=font_kpi_rotulo)
-        draw.text((col_x + 15, 115), str(valor), fill="#4ba3e3", font=font_kpi_valor)
-        col_x += largura_card + 20
-
-    y_offset = altura_cabecalho
-
-    # Renderizar Gráficos
-    for img in imagens_bytes:
-        imagem_final.paste(img, (25, y_offset))
-        y_offset += altura_por_grafico
-
-    # Renderizar Tabela Top 10 Centros
-    if df_top_centros is not None and not df_top_centros.empty:
-        y_offset = desenhar_tabela_pil(
-            draw, df_top_centros, "Ranking: Top 10 Centros com Maior Perda", 
-            start_x=30, start_y=y_offset, largura_max=1190, 
-            font_titulo=font_secao, font_corpo=font_tabela
-        )
-
-    # Renderizar Tabela Top 10 Marcas
-    if df_top_marcas is not None and not df_top_marcas.empty:
-        y_offset = desenhar_tabela_pil(
-            draw, df_top_marcas, "Ranking: Top 10 Marcas com Maior Perda", 
-            start_x=30, start_y=y_offset, largura_max=1190, 
-            font_titulo=font_secao, font_corpo=font_tabela
-        )
-
-    buf = io.BytesIO()
-    imagem_final.save(buf, format="PNG")
-    return buf.getvalue()
 
 
 # --- GERENCIAMENTO DE SESSÃO ---
@@ -661,7 +543,6 @@ def renderizar_dashboard():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        graficos_gerados = []
         df_top10_centros_export = None
         df_top10_marcas_export = None
 
@@ -703,7 +584,6 @@ def renderizar_dashboard():
                 showlegend=False
             )
             st.plotly_chart(fig_reg_comp, use_container_width=True)
-            graficos_gerados.append(fig_reg_comp)
             st.markdown("<br>", unsafe_allow_html=True)
 
         if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]: 
@@ -738,7 +618,6 @@ def renderizar_dashboard():
                     yaxis_title=""
                 )
                 st.plotly_chart(fig_qtd_lojas, use_container_width=True)
-                graficos_gerados.append(fig_qtd_lojas)
 
             with graf_col2:
                 st.subheader("🎯 Perda por Centro (R$)")
@@ -769,7 +648,6 @@ def renderizar_dashboard():
                     yaxis_title=""
                 )
                 st.plotly_chart(fig_lojas, use_container_width=True)
-                graficos_gerados.append(fig_lojas)
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
@@ -857,7 +735,6 @@ def renderizar_dashboard():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_marca_qtd, use_container_width=True)
-            graficos_gerados.append(fig_marca_qtd)
 
         with marca_col2:
             st.subheader("🏷️ Perdas por Marca - Todas (R$)")
@@ -890,11 +767,10 @@ def renderizar_dashboard():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_marca_rs, use_container_width=True)
-            graficos_gerados.append(fig_marca_rs)
 
-        # --- SEÇÃO DE EXPORTAÇÃO COMPLETA DA VISÃO GERAL ---
+        # --- SEÇÃO DE EXPORTAÇÃO DO RELATÓRIO PDF ---
         st.markdown("---")
-        st.subheader("📄 Exportação da Visão Geral (PDF)")
+        st.subheader("📄 Exportação do Relatório Executivo (PDF)")
         
         dic_kpis = {
             "Total de Perdas": formatar_qtd(perda_total_un),
@@ -905,20 +781,19 @@ def renderizar_dashboard():
 
         try:
             bytes_pdf = gerar_pdf_dashboard(
-                graficos_gerados, 
                 dic_kpis, 
                 df_top_centros=df_top10_centros_export, 
                 df_top_marcas=df_top10_marcas_export
             )
             st.download_button(
-                label="📄 Baixar Relatório Completo em PDF (.pdf)",
+                label="📄 Baixar Relatório Executivo em PDF (.pdf)",
                 data=bytes_pdf,
-                file_name="visao_geral_dashboard_completa.pdf",
+                file_name="relatorio_executivo_inventario.pdf",
                 mime="application/pdf",
                 type="primary"
             )
         except Exception as err:
-            st.warning(f"⚠️ Erro ao gerar PDF. Verifique se as bibliotecas `fpdf2`, `kaleido` e `Pillow` estão instaladas. Detalhes: {err}")
+            st.warning(f"⚠️ Erro ao gerar PDF: {err}")
 
     except Exception as e:
         st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
