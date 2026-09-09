@@ -1,7 +1,226 @@
-# --- FUNÇÃO COMPLETA PARA COMPILAR VISÃO GERAL EM IMAGEM (CORRIGIDA) ---
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import json
+import os
+import hashlib
+import requests
+import io
+from PIL import Image, ImageDraw, ImageFont
+
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(
+    page_title="Dashboard Executivo de Inventário - Vonny Cosméticos",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- ESTILIZAÇÃO VISUAL (TEMA ESCURO) ---
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #0e1117;
+        color: #ffffff;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
+        font-weight: bold;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Link do arquivo principal de Inventário
+URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josue_pereira_vonnycosmeticos_onmicrosoft_com/IQAVAJHO0KlcS73eMCZZkJMEAdrs0fKrEhefibx1ieyMW_Y?e=B8QkcG&download=1"
+
+DB_FILE = "usuarios_db.json"
+
+# ==============================================================================
+# MAPEAMENTO EXATO DAS REGIONAIS
+# ==============================================================================
+CENTROS_REGIONAL_1 = ["B013", "B015", "B016", "B017", "B019", "B020", "B021", "B022", "B023", "B024", "B025", "B026", "B027", "B028", "B029", "B031", "B032"]
+CENTROS_REGIONAL_2 = ["B001", "B002", "B006", "B007", "B008", "B009", "B010", "B011", "B012", "B018", "B030"]
+
+STR_REGIONAL_1 = "B013,B015,B016,B017,B019,B020,B021,B022,B023,B024,B025,B026,B027,B028,B029,B031,B032"
+STR_REGIONAL_2 = "B001,B002,B006,B007,B008,B009,B010,B011,B012,B018,B030"
+
+EMAILS_PERMITIDOS_PADRAO = {
+    "sara.leite@vonnycosmeticos.com.br": ("B001", "Gerente"),
+    "julio.fonseca@vonnycosmeticos.com.br": ("B002", "Gerente"),
+    "fabiana.bertassi@vonnycosmeticos.com.br": ("B006", "Gerente"),
+    "vanessa.tais@vonnycosmeticos.com.br": ("B007", "Gerente"),
+    "yara.silva@vonnycosmeticos.com.br": ("B008", "Gerente"),
+    "josemary.bezerra@vonnycosmeticos.com.br": ("B009", "Gerente"),
+    "maria.beserra@vonnycosmeticos.com.br": ("B010", "Gerente"),
+    "gislaine.barra@vonnycosmeticos.com.br": ("B011", "Gerente"),
+    "thamires.conceicao@vonnycosmeticos.com.br": ("B012", "Gerente"),
+    "vera.silva@vonnycosmeticos.com.br": ("B013", "Gerente"),
+    "vanessa.amaral@vonnycosmeticos.com.br": ("B015", "Gerente"),
+    "claudineia.mendes@vonnycosmeticos.com.br": ("B016", "Gerente"),
+    "thatiane.ferreira@vonnycosmeticos.com.br": ("B017", "Gerente"),
+    "katiane.silva@vonnycosmeticos.com.br": ("B018", "Gerente"),
+    "lanny.andryelly@vonnycosmeticos.com.br": ("B019", "Gerente"),
+    "suzana.silveira@vonnycosmeticos.com.br": ("B020", "Gerente"),
+    "luciana.vasconcelos@vonnycosmeticos.com.br": ("B021", "Gerente"),
+    "wagner.valle@casadolojista.com.br": (STR_REGIONAL_2, "Regional 2"),
+    "daiane.martins@vonnycosmeticos.com.br": ("B022", "Gerente"),
+    "gisele.trampusch@vonnycosmeticos.com.br": ("B023", "Gerente"),
+    "raquel.lopes@vonnycosmeticos.com.br": ("B024", "Gerente"),
+    "claudinea.santos@vonnycosmeticos.com.br": ("B025", "Gerente"),
+    "rosania.chagas@vonnycosmeticos.com.br": ("B026", "Gerente"),
+    "luana.costa@vonnycosmeticos.com.br": ("B027", "Gerente"),
+    "rosangela.botelho@vonnycosmeticos.com.br": ("B028", "Gerente"),
+    "elza.silva@vonnycosmeticos.com.br": ("B029", "Gerente"),
+    "joao.pereira@vonnycosmeticos.com.br": ("B030", "Gerente"),
+    "jorgiane.aragao@vonnycosmeticos.com.br": ("B031", "Gerente"),
+    "jvn221106@gmail.com": ("TODAS", "Administrador"),
+    "sergio.oliveira@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
+    "controladoriaprevencao@gmail.com": (STR_REGIONAL_1, "Regional 1"),
+    "josue.victor@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
+    "vanusia.garcia@casadolojista.com.br": ("TODAS", "Administrador")
+}
+
+OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Regional 1", "Regional 2", "Administrador"]
+
+
+# --- PERSISTÊNCIA E USUÁRIOS (JSON) ---
+def carregar_dados_db():
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "r") as f:
+            data = json.load(f)
+            if "usuarios" in data:
+                usuarios = data["usuarios"]
+                removidos = set(data.get("removidos", []))
+            else:
+                usuarios = data
+                removidos = set()
+    else:
+        usuarios = {}
+        removidos = set()
+
+    atualizou = False
+    for email, (loja, perfil_padrao) in EMAILS_PERMITIDOS_PADRAO.items():
+        email_limpo = email.strip().lower()
+        if email_limpo not in usuarios and email_limpo not in removidos:
+            usuarios[email_limpo] = {
+                "loja": loja,
+                "perfil": perfil_padrao,
+                "senha": None,
+                "forcar_redefinicao": False
+            }
+            atualizou = True
+        elif email_limpo in usuarios:
+            if "perfil" not in usuarios[email_limpo]:
+                usuarios[email_limpo]["perfil"] = perfil_padrao
+                atualizou = True
+
+    if atualizou or not os.path.exists(DB_FILE):
+        salvar_dados_db(usuarios, removidos)
+
+    return usuarios, removidos
+
+def salvar_dados_db(usuarios, removidos):
+    with open(DB_FILE, "w") as f:
+        json.dump({
+            "usuarios": usuarios,
+            "removidos": list(removidos)
+        }, f, indent=4)
+
+def gerar_hash(senha):
+    return hashlib.sha256(senha.encode()).hexdigest()
+
+
+# --- LEITURA E TRATAMENTO DA PLANILHA NUVEM ---
+@st.cache_data(ttl=60)
+def load_data():
+    response = requests.get(URL_EXCEL_NUVEM)
+    response.raise_for_status()
+    
+    excel_file = io.BytesIO(response.content)
+    xls = pd.ExcelFile(excel_file)
+    df = pd.read_excel(xls, sheet_name="VALORES INVENTÁRIOS")
+    df.columns = [str(col).strip() for col in df.columns]
+    
+    def achar_coluna(df_target, termos_prioritarios):
+        for termo in termos_prioritarios:
+            for col in df_target.columns:
+                if termo.lower() in str(col).lower():
+                    return col
+        return None
+
+    col_qtd = achar_coluna(df, ['qtd. um registro', 'qtd', 'registro'])
+    col_valor = achar_coluna(df, ['montante em mi', 'montante', 'mi'])
+    col_loja = achar_coluna(df, ['centro'])
+    col_marca = achar_coluna(df, ['fornecedor2', 'fornecedor', 'marca'])
+
+    if not col_qtd: col_qtd = df.columns[0]
+    if not col_valor: col_valor = df.columns[1]
+    if not col_loja: col_loja = df.columns[2]
+    if not col_marca: col_marca = df.columns[3]
+
+    df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0)
+    df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0)
+    df['Loja_Nome'] = df[col_loja].fillna('S/ Centro').astype(str).str.strip()
+    df['Marca_Nome'] = df[col_marca].fillna('Sem Marca').astype(str).str.strip()
+
+    def classificar_centro(centro):
+        c = str(centro).strip().upper()
+        if c in CENTROS_REGIONAL_1:
+            return 'Regional 1'
+        elif c in CENTROS_REGIONAL_2:
+            return 'Regional 2'
+        else:
+            return 'Sem Regional'
+
+    df['Regional_Nome'] = df['Loja_Nome'].apply(classificar_centro)
+
+    return df
+
+
+def formatar_moeda(val):
+    if val < 0:
+        return f"-R$ {abs(val):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    else:
+        return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def formatar_qtd(val):
+    if val < 0:
+        return f"-{abs(val):,.0f} UN".replace(",", ".")
+    else:
+        return f"{val:,.0f} UN".replace(",", ".")
+
+
+# --- DESENHAR TABELAS NA IMAGEM (PIL) ---
+def desenhar_tabela_pil(draw, df_tabela, titulo, start_x, start_y, largura_max, font_titulo, font_corpo):
+    draw.text((start_x, start_y), titulo, fill="#ffffff", font=font_titulo)
+    y = start_y + 35
+
+    colunas = list(df_tabela.columns)
+    num_cols = len(colunas)
+    largura_col = largura_max // num_cols
+
+    # Cabeçalho
+    draw.rectangle([start_x, y, start_x + largura_max, y + 30], fill="#1e232a", outline="#30363d", width=1)
+    for i, col in enumerate(colunas):
+        cx = start_x + (i * largura_col) + 10
+        draw.text((cx, y + 6), str(col), fill="#4ba3e3", font=font_corpo)
+    y += 30
+
+    # Linhas de dados
+    for idx, row in df_tabela.iterrows():
+        cor_fundo = "#161b22" if idx % 2 == 0 else "#0e1117"
+        draw.rectangle([start_x, y, start_x + largura_max, y + 26], fill=cor_fundo, outline="#21262d", width=1)
+        for i, col in enumerate(colunas):
+            cx = start_x + (i * largura_col) + 10
+            draw.text((cx, y + 5), str(row[col]), fill="#d0d7de", font=font_corpo)
+        y += 26
+
+    return y + 30
+
+
+# --- FUNÇÃO COMPLETA PARA COMPILAR VISÃO GERAL EM IMAGEM ---
 def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top_marcas=None):
     imagens_bytes = []
-    # Renderiza os gráficos com dimensões exatas e margens limpas
     for fig in figuras_lista:
         fig_temp = fig.full_figure_for_development(warn=False)
         fig_temp.update_layout(width=1190, height=450, margin=dict(l=40, r=40, t=50, b=50))
@@ -12,14 +231,12 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
     altura_cabecalho = 180
     altura_por_grafico = 460
     
-    # Cálculo preciso da altura das tabelas (cabeçalho + linhas + espaçamento)
     num_linhas_centros = len(df_top_centros) if df_top_centros is not None else 0
     altura_tabela_centros = (60 + (num_linhas_centros * 28) + 40) if num_linhas_centros > 0 else 0
 
     num_linhas_marcas = len(df_top_marcas) if df_top_marcas is not None else 0
     altura_tabela_marcas = (60 + (num_linhas_marcas * 28) + 40) if num_linhas_marcas > 0 else 0
 
-    # Altura total calculada dinamicamente sem cortes
     altura_total = altura_cabecalho + (len(imagens_bytes) * altura_por_grafico) + altura_tabela_centros + altura_tabela_marcas + 80
 
     imagem_final = Image.new("RGB", (largura, altura_total), color="#0e1117")
@@ -38,10 +255,10 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
         font_kpi_valor = ImageFont.load_default()
         font_tabela = ImageFont.load_default()
 
-    # 1. Cabeçalho Principal
+    # Cabeçalho
     draw.text((30, 25), "📊 Dashboard Executivo de Inventário - Visão Geral", fill="#ffffff", font=font_titulo_gen)
 
-    # 2. Cards de KPIs
+    # KPIs
     col_x = 30
     largura_card = 270
     for rotulo, valor in kpis_dict.items():
@@ -52,12 +269,12 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
 
     y_offset = altura_cabecalho
 
-    # 3. Renderizar Gráficos (Sequencialmente)
+    # Renderizar Gráficos
     for img in imagens_bytes:
         imagem_final.paste(img, (30, y_offset))
         y_offset += altura_por_grafico
 
-    # 4. Renderizar Tabela Top 10 Centros (se existir)
+    # Renderizar Tabela Top 10 Centros
     if df_top_centros is not None and not df_top_centros.empty:
         y_offset = desenhar_tabela_pil(
             draw, df_top_centros, "🏢 Ranking: Top 10 Centros com Maior Perda", 
@@ -65,7 +282,7 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
             font_titulo=font_secao, font_corpo=font_tabela
         )
 
-    # 5. Renderizar Tabela Top 10 Marcas (se existir)
+    # Renderizar Tabela Top 10 Marcas
     if df_top_marcas is not None and not df_top_marcas.empty:
         y_offset = desenhar_tabela_pil(
             draw, df_top_marcas, "⚠️ Ranking: Top 10 Marcas com Maior Perda", 
@@ -77,7 +294,7 @@ def gerar_imagem_dashboard(figuras_lista, kpis_dict, df_top_centros=None, df_top
     imagem_final.save(buf, format="PNG")
     return buf.getvalue()
 
-# ==============================================================================
+    # ==============================================================================
 # INTERFACE DE USUÁRIO - TELAS
 # ==============================================================================
 
