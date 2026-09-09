@@ -501,16 +501,16 @@ if perfil_usuario == "Administrador":
 if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Gerente"]: 
     graf_col1, graf_col2 = st.columns(2)
 
-        with graf_col1:
-            st.subheader("📦 Perda por Centro (Qtd)")
-            df_qtd_lojas = (
-                df_filtered[df_filtered['Qtd_Limpa'] < 0]
-                .groupby('Loja_Nome')['Qtd_Limpa']
-                .sum()
-                .abs()
-                .reset_index()
-                .sort_values(by='Qtd_Limpa', ascending=False)
-            )
+    with graf_col1:
+        st.subheader("📦 Perda por Centro (Qtd)")
+        df_qtd_lojas = (
+            df_filtered[df_filtered['Qtd_Limpa'] < 0]
+            .groupby('Loja_Nome')['Qtd_Limpa']
+            .sum()
+            .abs()
+            .reset_index()
+            .sort_values(by='Qtd_Limpa', ascending=False)
+        )
             df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
 
             fig_qtd_lojas = px.bar(
