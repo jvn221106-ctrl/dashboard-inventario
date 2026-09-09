@@ -690,7 +690,6 @@ if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Gerente"]:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-    except Exception as e:
         st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
 
 
