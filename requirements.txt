@@ -2,6 +2,6 @@ streamlit
 pandas
 plotly
 openpyxl
-kaleido>=1.0.0
 Pillow
 fpdf2
+matplotlib
