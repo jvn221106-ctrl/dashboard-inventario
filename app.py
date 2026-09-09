@@ -51,7 +51,6 @@ def desenhar_tabela_pdf(pdf, df_tabela, titulo):
     pdf.set_font("Helvetica", "", 8)
     pdf.set_text_color(40, 40, 40)
     for idx, row in df_tabela.iterrows():
-        # Quebra de página automática se a tabela for longa
         if pdf.get_y() > 260:
             pdf.add_page()
             pdf.set_font("Helvetica", "B", 8)
@@ -107,7 +106,6 @@ def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None, df_t
     desenhar_tabela_pdf(pdf, df_top_centros, "Top 10 Centros com Maior Perda")
     desenhar_tabela_pdf(pdf, df_top_marcas, "Top 10 Marcas com Maior Perda")
 
-    # Tabelas completas anexadas ao PDF
     if df_todos_centros is not None and not df_todos_centros.empty:
         desenhar_tabela_pdf(pdf, df_todos_centros, "Detalhamento Geral de Perda por Centro")
 
@@ -138,7 +136,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Link do arquivo principal de Inventário
 URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josue_pereira_vonnycosmeticos_onmicrosoft_com/IQAVAJHO0KlcS73eMCZZkJMEAdrs0fKrEhefibx1ieyMW_Y?e=B8QkcG&download=1"
 
 DB_FILE = "usuarios_db.json"
@@ -190,8 +187,6 @@ EMAILS_PERMITIDOS_PADRAO = {
 
 OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Regional 1", "Regional 2", "Administrador"]
 
-
-# --- PERSISTÊNCIA E USUÁRIOS (JSON) ---
 def carregar_dados_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
@@ -237,7 +232,6 @@ def salvar_dados_db(usuarios, removidos):
 def gerar_hash(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
-
 # --- LEITURA E TRATAMENTO DA PLANILHA NUVEM ---
 @st.cache_data(ttl=60)
 def load_data():
@@ -266,18 +260,19 @@ def load_data():
     if not col_loja: col_loja = df.columns[2]
     if not col_marca: col_marca = df.columns[3]
 
-    df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0)
-    df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0)
+    # Força conversão para float garantindo isolamento de tipos
+    df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0.0)
+    df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0.0)
     
-    # Tratamento para remover Nones/NaNs e textos vazios
-    df['Loja_Nome'] = df[col_loja].astype(str).str.strip()
+    # Tratamento estrito para strings (evita contaminação de tipos float NaN)
+    df['Loja_Nome'] = df[col_loja].astype(str).fillna('').str.strip()
     df['Loja_Nome'] = df['Loja_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'S/ Centro')
     
-    df['Marca_Nome'] = df[col_marca].astype(str).str.strip()
+    df['Marca_Nome'] = df[col_marca].astype(str).fillna('').str.strip()
     df['Marca_Nome'] = df['Marca_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'Sem Marca')
 
-    # Filtrar registros totalmente inválidos se houver
-    df = df[(df['Loja_Nome'] != 'S/ Centro') & (df['Marca_Nome'] != 'Sem Marca')]
+    # Filtra dados vazios/inválidos
+    df = df[(df['Loja_Nome'] != 'S/ Centro') & (df['Marca_Nome'] != 'Sem Marca')].copy()
 
     def classificar_centro(centro):
         c = str(centro).strip().upper()
@@ -292,7 +287,6 @@ def load_data():
 
     return df
 
-
 def formatar_moeda(val):
     if val < 0:
         return f"-R$ {abs(val):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -305,7 +299,6 @@ def formatar_qtd(val):
     else:
         return f"{val:,.0f} UN".replace(",", ".")
 
-
 # --- GERENCIAMENTO DE SESSÃO ---
 if "logado" not in st.session_state:
     st.session_state["logado"] = False
@@ -313,7 +306,6 @@ if "usuario_atual" not in st.session_state:
     st.session_state["usuario_atual"] = None
 if "troca_obrigatoria" not in st.session_state:
     st.session_state["troca_obrigatoria"] = False
-
 
 # --- TELA DE LOGIN ---
 def renderizar_tela_login():
@@ -366,7 +358,6 @@ def renderizar_tela_login():
     with st.expander("❓ Esqueceu a senha?"):
         st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinicao de senha.")
 
-
 # --- TELA OBRIGATÓRIA DE REDEFINIÇÃO DE SENHA ---
 def renderizar_tela_troca_obrigatoria():
     st.title("🔑 Redefinição de Senha Obrigatória")
@@ -396,7 +387,6 @@ def renderizar_tela_troca_obrigatoria():
         st.session_state["troca_obrigatoria"] = False
         st.success("✅ Senha atualizada com sucesso!")
         st.rerun()
-
 
 # --- ABA PAINEL ADMIN ---
 def renderizar_aba_admin():
@@ -489,7 +479,6 @@ def renderizar_aba_admin():
                 st.success(f"🗑️ Usuário **{user_para_deletar}** removido permanentemente!")
                 st.rerun()
 
-
 # --- DASHBOARD VISUAL DE INVENTÁRIO ---
 def renderizar_dashboard():
     try:
@@ -508,7 +497,7 @@ def renderizar_dashboard():
             st.cache_data.clear()
             st.rerun()
 
-        regionais_disponiveis = [r for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
+        regionais_disponiveis = [str(r) for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
 
         if perfil_usuario == "Administrador":
             regionais_sel = st.sidebar.multiselect(
@@ -521,7 +510,9 @@ def renderizar_dashboard():
         else:
             regionais_sel = regionais_disponiveis
 
-        lojas_disponiveis = [x for x in sorted(df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique()) if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
+        # Conversão estrita de todos os nomes de loja para string para evitar comparações float vs str no sorted()
+        lojas_unicas = [str(x) for x in df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
+        lojas_disponiveis = sorted(lojas_unicas)
 
         if perfil_usuario == "Administrador":
             lojas_sel = st.sidebar.multiselect(
@@ -544,7 +535,9 @@ def renderizar_dashboard():
                 lojas_sel = lojas_disponiveis
             st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
 
-        marcas = [x for x in sorted(df['Marca_Nome'].unique()) if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
+        # Conversão estrita de marcas para string para ordenação limpa
+        marcas_unicas = [str(x) for x in df['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
+        marcas = sorted(marcas_unicas)
         marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
 
         df_filtered = df[
@@ -557,9 +550,9 @@ def renderizar_dashboard():
         st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
         st.markdown("---")
 
-        perda_total_rs = df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum()
-        perda_total_un = df_filtered[df_filtered['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum()
-        sobra_total_rs = df_filtered[df_filtered['Valor_Limpo'] > 0]['Valor_Limpo'].sum()
+        perda_total_rs = float(df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum())
+        perda_total_un = float(df_filtered[df_filtered['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum())
+        sobra_total_rs = float(df_filtered[df_filtered['Valor_Limpo'] > 0]['Valor_Limpo'].sum())
         resultado_net = sobra_total_rs + perda_total_rs
 
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -681,7 +674,6 @@ def renderizar_dashboard():
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
 
-            # Tabela completa de Centros
             df_centros_completo = (
                 df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
                 .groupby(['Loja_Nome', 'Regional_Nome'])
@@ -697,7 +689,6 @@ def renderizar_dashboard():
             df_centros_completo = df_centros_completo[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
             df_centros_completo.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
-            # Top 10
             df_top10_centros = df_centros_completo.head(10).copy()
             df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
             df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
@@ -705,7 +696,6 @@ def renderizar_dashboard():
             st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
             df_top10_centros_export = df_top10_centros.copy()
 
-            # Formatando todos os centros para PDF
             df_todos_centros_export = df_centros_completo.copy()
             df_todos_centros_export['Perda (Qtd)'] = df_todos_centros_export['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
             df_todos_centros_export['Perda (R$)'] = df_todos_centros_export['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
@@ -713,7 +703,6 @@ def renderizar_dashboard():
         st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("⚠️ Ranking: Top 10 Marcas com Maior Perda")
 
-        # Tabela completa de Marcas
         df_marcas_completo = (
             df_filtered[(df_filtered['Valor_Limpo'] < 0) | (df_filtered['Qtd_Limpa'] < 0)]
             .groupby('Marca_Nome')
@@ -729,7 +718,6 @@ def renderizar_dashboard():
         df_marcas_completo = df_marcas_completo[['Posição', 'Marca_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
         df_marcas_completo.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
-        # Top 10
         df_top10_marcas = df_marcas_completo.head(10).copy()
         df_top10_marcas['Perda (Qtd)'] = df_top10_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
         df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
@@ -737,7 +725,6 @@ def renderizar_dashboard():
         st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
         df_top10_marcas_export = df_top10_marcas.copy()
 
-        # Formatando todas as marcas para PDF
         df_todas_marcas_export = df_marcas_completo.copy()
         df_todas_marcas_export['Perda (Qtd)'] = df_todas_marcas_export['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
         df_todas_marcas_export['Perda (R$)'] = df_todas_marcas_export['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
@@ -842,7 +829,6 @@ def renderizar_dashboard():
 
     except Exception as e:
         st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
-
 
 # --- FLUXO PRINCIPAL DA APLICAÇÃO ---
 if not st.session_state["logado"]:
