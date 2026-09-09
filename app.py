@@ -649,7 +649,7 @@ def renderizar_dashboard():
                 .reset_index()
                 .sort_values(by='Valor_Limpo', ascending=False)
             )
-            df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-R${x:,.0f}")
+            df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.0f}")
 
             fig_marca_rs = px.line(
                 df_marca_rs,
