@@ -6,7 +6,9 @@ import os
 import hashlib
 import requests
 import io
-from PIL import Image, ImageDraw, ImageFont
+import tempfile
+from fpdf import FPDF
+from PIL import Image
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
