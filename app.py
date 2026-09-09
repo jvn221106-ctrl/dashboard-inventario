@@ -6,6 +6,7 @@ import os
 import hashlib
 import requests
 import io
+from PIL import Image, ImageDraw, ImageFont
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -189,6 +190,50 @@ def formatar_qtd(val):
         return f"{val:,.0f} UN".replace(",", ".")
 
 
+# --- FUNÇÃO PARA COMPILAR VISÃO GERAL EM IMAGEM ---
+def gerar_imagem_dashboard(figuras_lista, kpis_dict):
+    imagens_bytes = []
+    for fig in figuras_lista:
+        img_bytes = fig.to_image(format="png", width=1200, height=500, scale=2)
+        imagens_bytes.append(Image.open(io.BytesIO(img_bytes)))
+
+    largura = 1250
+    altura_cabecalho = 180
+    altura_por_grafico = 520
+    altura_total = altura_cabecalho + (len(imagens_bytes) * altura_por_grafico) + 40
+
+    imagem_final = Image.new("RGB", (largura, altura_total), color="#0e1117")
+    draw = ImageDraw.Draw(imagem_final)
+
+    try:
+        font_titulo = ImageFont.truetype("arial.ttf", 28)
+        font_kpi_rotulo = ImageFont.truetype("arial.ttf", 14)
+        font_kpi_valor = ImageFont.truetype("arial.ttf", 20)
+    except IOError:
+        font_titulo = ImageFont.load_default()
+        font_kpi_rotulo = ImageFont.load_default()
+        font_kpi_valor = ImageFont.load_default()
+
+    draw.text((30, 25), "📊 Dashboard Executivo de Inventário - Visão Geral", fill="#ffffff", font=font_titulo)
+
+    col_x = 30
+    largura_card = 270
+    for rotulo, valor in kpis_dict.items():
+        draw.rectangle([col_x, 80, col_x + largura_card, 150], fill="#1e232a", outline="#30363d", width=1)
+        draw.text((col_x + 15, 90), rotulo, fill="#a3a8b2", font=font_kpi_rotulo)
+        draw.text((col_x + 15, 115), str(valor), fill="#4ba3e3", font=font_kpi_valor)
+        col_x += largura_card + 20
+
+    y_offset = altura_cabecalho
+    for img in imagens_bytes:
+        imagem_final.paste(img, (25, y_offset))
+        y_offset += altura_por_grafico
+
+    buf = io.BytesIO()
+    imagem_final.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 # --- GERENCIAMENTO DE SESSÃO ---
 if "logado" not in st.session_state:
     st.session_state["logado"] = False
@@ -247,7 +292,7 @@ def renderizar_tela_login():
 
     st.markdown("---")
     with st.expander("❓ Esqueceu a senha?"):
-        st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinição de senha.")
+        st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinicao de senha.")
 
 
 # --- TELA OBRIGATÓRIA DE REDEFINIÇÃO DE SENHA ---
@@ -453,6 +498,9 @@ def renderizar_dashboard():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
+        # Dicionário de gráficos gerados para compilação em imagem
+        graficos_gerados = []
+
         if perfil_usuario == "Administrador":
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
 
@@ -474,6 +522,7 @@ def renderizar_dashboard():
                 y='Valor_Limpo',
                 text='Texto_Valor',
                 color='Regional_Nome',
+                title="Comparativo por Divisão Regional",
                 color_discrete_map={
                     'Regional 1': '#4ba3e3',
                     'Regional 2': '#ff7f0e',
@@ -490,9 +539,10 @@ def renderizar_dashboard():
                 showlegend=False
             )
             st.plotly_chart(fig_reg_comp, use_container_width=True)
+            graficos_gerados.append(fig_reg_comp)
             st.markdown("<br>", unsafe_allow_html=True)
 
-        # SEÇÃO VISÍVEL APENAS PARA ADMINISTRADORES E REGIONAIS (OCULTA PARA GERENTES/LÍDERES)
+        # SEÇÃO VISÍVEL APENAS PARA ADMINISTRADORES E REGIONAIS
         if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]: 
             graf_col1, graf_col2 = st.columns(2)
 
@@ -513,6 +563,7 @@ def renderizar_dashboard():
                     x='Loja_Nome',
                     y='Qtd_Limpa',
                     text='Texto_Qtd',
+                    title="Perda por Centro (Qtd)",
                     labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
                 )
                 fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
@@ -524,6 +575,7 @@ def renderizar_dashboard():
                     yaxis_title=""
                 )
                 st.plotly_chart(fig_qtd_lojas, use_container_width=True)
+                graficos_gerados.append(fig_qtd_lojas)
 
             with graf_col2:
                 st.subheader("🎯 Perda por Centro (R$)")
@@ -535,13 +587,14 @@ def renderizar_dashboard():
                     .reset_index()
                     .sort_values(by='Valor_Limpo', ascending=False)
                 )
-                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
+                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
 
                 fig_lojas = px.bar(
                     df_lojas,
                     x='Loja_Nome',
                     y='Valor_Limpo',
                     text='Texto_Valor',
+                    title="Perda por Centro (R$)",
                     labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
                 )
                 fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
@@ -553,6 +606,7 @@ def renderizar_dashboard():
                     yaxis_title=""
                 )
                 st.plotly_chart(fig_lojas, use_container_width=True)
+                graficos_gerados.append(fig_lojas)
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
@@ -574,7 +628,7 @@ def renderizar_dashboard():
             df_top10_centros.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
             df_top10_centros['Perda (Qtd)'] = df_top10_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-            df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"-R$ {x:,.2f}")
+            df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
             st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
 
@@ -599,7 +653,7 @@ def renderizar_dashboard():
         df_top10_marcas.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
 
         df_top10_marcas['Perda (Qtd)'] = df_top10_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-        df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"-R$ {x:,.2f}")
+        df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
         st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
 
@@ -626,6 +680,7 @@ def renderizar_dashboard():
                 y='Qtd_Limpa',
                 text='Texto_Qtd',
                 markers=True,
+                title="Perdas por Marca - Todas (Qtd)",
                 labels={'Qtd_Limpa': 'Perda (Qtd)', 'Marca_Nome': 'Marca'}
             )
             fig_marca_qtd.update_traces(line_color='#ff7f0e', line_width=3, marker_size=7, textposition='top center')
@@ -638,6 +693,7 @@ def renderizar_dashboard():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_marca_qtd, use_container_width=True)
+            graficos_gerados.append(fig_marca_qtd)
 
         with marca_col2:
             st.subheader("🏷️ Perdas por Marca - Todas (R$)")
@@ -649,7 +705,7 @@ def renderizar_dashboard():
                 .reset_index()
                 .sort_values(by='Valor_Limpo', ascending=False)
             )
-            df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.0f}")
+            df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-{x:,.0f}")
 
             fig_marca_rs = px.line(
                 df_marca_rs,
@@ -657,6 +713,7 @@ def renderizar_dashboard():
                 y='Valor_Limpo',
                 text='Texto_RS',
                 markers=True,
+                title="Perdas por Marca - Todas (R$)",
                 labels={'Valor_Limpo': 'Perda (R$)', 'Marca_Nome': 'Marca'}
             )
             fig_marca_rs.update_traces(line_color='#4ba3e3', line_width=3, marker_size=7, textposition='top center')
@@ -669,21 +726,30 @@ def renderizar_dashboard():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_marca_rs, use_container_width=True)
+            graficos_gerados.append(fig_marca_rs)
 
+        # --- SEÇÃO DE EXPORTAÇÃO DE IMAGEM DA VISÃO GERAL ---
         st.markdown("---")
-        st.subheader("📥 Exportação de Dados Filtrados")
+        st.subheader("🖼️ Exportação da Visão Geral")
         
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_filtered.to_excel(writer, index=False, sheet_name="Inventario_Filtrado")
-        processed_data = output.getvalue()
+        dic_kpis = {
+            "Total de Perdas": formatar_qtd(perda_total_un),
+            "Perda Total (R$)": formatar_moeda(perda_total_rs),
+            "Sobras / Ajustes": formatar_moeda(sobra_total_rs),
+            "Resultado Net": formatar_moeda(resultado_net)
+        }
 
-        st.download_button(
-            label="📄 Baixar Relatório em Excel (.xlsx)",
-            data=processed_data,
-            file_name="relatorio_inventario_filtrado.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        try:
+            bytes_imagem = gerar_imagem_dashboard(graficos_gerados, dic_kpis)
+            st.download_button(
+                label="🖼️ Baixar Visão Geral em Imagem (.png)",
+                data=bytes_imagem,
+                file_name="visao_geral_dashboard.png",
+                mime="image/png",
+                type="primary"
+            )
+        except Exception as err:
+            st.warning("⚠️ Para gerar a imagem compilada, certifique-se de que a biblioteca `kaleido` e a `Pillow` estejam instaladas (`pip install kaleido pillow`).")
 
     except Exception as e:
         st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
