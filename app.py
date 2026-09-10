@@ -73,9 +73,10 @@ EMAILS_PERMITIDOS_PADRAO = {
     "jorgiane.aragao@vonnycosmeticos.com.br": ("B031", "Gerente"),
     "jvn221106@gmail.com": ("TODAS", "Administrador"),
     "sergio.oliveira@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
-    "controladoriaprevencao@gmail.com": (STR_REGIONAL_1, "Regional 1"),
+    "controladoriaprevencao@gmail.com": ("TODAS", "Administrador"),
     "josue.victor@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
-    "vanusia.garcia@casadolojista.com.br": ("TODAS", "Administrador")
+    "vanusia.garcia@casadolojista.com.br": ("TODAS", "Administrador"),
+    "luciana.valle@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Regional 1")
 }
 
 OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Regional 1", "Regional 2", "Administrador"]
