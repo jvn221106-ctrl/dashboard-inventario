@@ -4,3 +4,4 @@ plotly
 openpyxl
 fpdf2
 requests
+kaleido
