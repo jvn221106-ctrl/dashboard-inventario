@@ -75,7 +75,7 @@ def adicionar_grafico_pdf(pdf, fig, titulo):
         return
     try:
         # Gera o PNG via Kaleido na memória
-        img_bytes = fig.to_image(format="png", width=800, height=450, engine="kaleido")
+        img_bytes = fig.to_image(format="png", width=800, height=450)
         
         # Salva em arquivo temporário para inserção no FPDF
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
