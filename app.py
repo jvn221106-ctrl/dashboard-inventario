@@ -6,10 +6,11 @@ import os
 import hashlib
 import requests
 import io
+import tempfile
 from fpdf import FPDF
 
 # =========================================================
-# DECLARAÇÃO DAS FUNÇÕES DO PDF (SEM DEPENDÊNCIA DE KALEIDO)
+# DECLARAÇÃO DAS FUNÇÕES DO PDF (COM SUPORTE A KALEIDO / IMAGENS)
 # =========================================================
 
 class PDFReport(FPDF):
@@ -69,7 +70,36 @@ def desenhar_tabela_pdf(pdf, df_tabela, titulo):
         pdf.ln()
     pdf.ln(5)
 
-def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None, df_todos_centros=None, df_todas_marcas=None):
+def adicionar_grafico_pdf(pdf, fig, titulo):
+    if fig is None:
+        return
+    try:
+        # Gera o PNG via Kaleido na memória
+        img_bytes = fig.to_image(format="png", width=800, height=450, engine="kaleido")
+        
+        # Salva em arquivo temporário para inserção no FPDF
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp.write(img_bytes)
+            tmp_path = tmp.name
+
+        if pdf.get_y() > 200:
+            pdf.add_page()
+
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(30, 35, 42)
+        pdf.cell(0, 7, titulo, new_x="LMARGIN", new_y="NEXT", align="L")
+        pdf.ln(2)
+
+        pdf.image(tmp_path, w=180)
+        pdf.ln(5)
+
+        os.remove(tmp_path)
+    except Exception as e:
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(200, 0, 0)
+        pdf.cell(0, 5, f"[Erro ao renderizar imagem do gráfico: {e}]", new_x="LMARGIN", new_y="NEXT")
+
+def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None, df_todos_centros=None, df_todas_marcas=None, lista_figuras=None):
     pdf = PDFReport(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -101,6 +131,12 @@ def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None, df_t
         pdf.cell(largura_card - 4, 5, str(valor), align='L')
 
     pdf.set_y(y_kpi + altura_card + 6)
+
+    # Adiciona Gráficos (gerados com Kaleido) se fornecidos
+    if lista_figuras:
+        for titulo_graf, fig_obj in lista_figuras:
+            if fig_obj is not None:
+                adicionar_grafico_pdf(pdf, fig_obj, titulo_graf)
 
     # Tabelas executivas
     desenhar_tabela_pdf(pdf, df_top_centros, "Top 10 Centros com Maior Perda")
@@ -260,18 +296,15 @@ def load_data():
     if not col_loja: col_loja = df.columns[2]
     if not col_marca: col_marca = df.columns[3]
 
-    # Força conversão para float garantindo isolamento de tipos
     df['Qtd_Limpa'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0.0)
     df['Valor_Limpo'] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0.0)
     
-    # Tratamento estrito para strings (evita contaminação de tipos float NaN)
     df['Loja_Nome'] = df[col_loja].astype(str).fillna('').str.strip()
     df['Loja_Nome'] = df['Loja_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'S/ Centro')
     
     df['Marca_Nome'] = df[col_marca].astype(str).fillna('').str.strip()
     df['Marca_Nome'] = df['Marca_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'Sem Marca')
 
-    # Filtra dados vazios/inválidos
     df = df[(df['Loja_Nome'] != 'S/ Centro') & (df['Marca_Nome'] != 'Sem Marca')].copy()
 
     def classificar_centro(centro):
@@ -510,7 +543,6 @@ def renderizar_dashboard():
         else:
             regionais_sel = regionais_disponiveis
 
-        # Conversão estrita de todos os nomes de loja para string para evitar comparações float vs str no sorted()
         lojas_unicas = [str(x) for x in df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
         lojas_disponiveis = sorted(lojas_unicas)
 
@@ -535,7 +567,6 @@ def renderizar_dashboard():
                 lojas_sel = lojas_disponiveis
             st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
 
-        # Conversão estrita de marcas para string para ordenação limpa
         marcas_unicas = [str(x) for x in df['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
         marcas = sorted(marcas_unicas)
         marcas_sel = st.sidebar.multiselect("Selecione as Marcas:", options=marcas, default=marcas)
@@ -567,6 +598,9 @@ def renderizar_dashboard():
         df_top10_marcas_export = None
         df_todos_centros_export = None
         df_todas_marcas_export = None
+        
+        # Coleção de figuras para renderizar no PDF via Kaleido
+        figuras_pdf = []
 
         if perfil_usuario == "Administrador":
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
@@ -607,6 +641,7 @@ def renderizar_dashboard():
             )
             st.plotly_chart(fig_reg_comp, use_container_width=True)
             st.markdown("<br>", unsafe_allow_html=True)
+            figuras_pdf.append(("Comparativo por Divisão Regional", fig_reg_comp))
 
         if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]: 
             graf_col1, graf_col2 = st.columns(2)
@@ -640,6 +675,7 @@ def renderizar_dashboard():
                     yaxis_title=""
                 )
                 st.plotly_chart(fig_qtd_lojas, use_container_width=True)
+                figuras_pdf.append(("Perda por Centro (Qtd)", fig_qtd_lojas))
 
             with graf_col2:
                 st.subheader("🎯 Perda por Centro (R$)")
@@ -670,6 +706,7 @@ def renderizar_dashboard():
                     yaxis_title=""
                 )
                 st.plotly_chart(fig_lojas, use_container_width=True)
+                figuras_pdf.append(("Perda por Centro (R$)", fig_lojas))
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
@@ -765,6 +802,7 @@ def renderizar_dashboard():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_marca_qtd, use_container_width=True)
+            figuras_pdf.append(("Perdas por Marca - Todas (Qtd)", fig_marca_qtd))
 
         with marca_col2:
             st.subheader("🏷️ Perdas por Marca - Todas (R$)")
@@ -797,6 +835,7 @@ def renderizar_dashboard():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_marca_rs, use_container_width=True)
+            figuras_pdf.append(("Perdas por Marca - Todas (R$)", fig_marca_rs))
 
         # --- SEÇÃO DE EXPORTAÇÃO DO RELATÓRIO PDF ---
         st.markdown("---")
@@ -815,10 +854,11 @@ def renderizar_dashboard():
                 df_top_centros=df_top10_centros_export, 
                 df_top_marcas=df_top10_marcas_export,
                 df_todos_centros=df_todos_centros_export,
-                df_todas_marcas=df_todas_marcas_export
+                df_todas_marcas=df_todas_marcas_export,
+                lista_figuras=figuras_pdf
             )
             st.download_button(
-                label="📄 Baixar Relatório Executivo em PDF (.pdf)",
+                label="📄 Baixar Relatório Executivo em PDF com Gráficos (.pdf)",
                 data=bytes_pdf,
                 file_name="relatorio_executivo_inventario.pdf",
                 mime="application/pdf",
