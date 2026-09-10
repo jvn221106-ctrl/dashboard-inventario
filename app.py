@@ -6,149 +6,6 @@ import os
 import hashlib
 import requests
 import io
-import tempfile
-from fpdf import FPDF
-
-# =========================================================
-# DECLARAÇÃO DAS FUNÇÕES DO PDF (COM TRATAMENTO DO KALEIDO)
-# =========================================================
-
-class PDFReport(FPDF):
-    def header(self):
-        self.set_font('Helvetica', 'B', 14)
-        self.set_text_color(30, 35, 42)
-        self.cell(0, 10, 'Relatorio Executivo de Inventario', border=False, new_x="LMARGIN", new_y="NEXT", align='L')
-        self.set_font('Helvetica', '', 9)
-        self.set_text_color(100, 100, 100)
-        self.cell(0, 5, 'Visao Geral e Indicadores de Perda', border=False, new_x="LMARGIN", new_y="NEXT", align='L')
-        self.ln(5)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Helvetica', 'I', 8)
-        self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f'Página {self.page_no()}', align='C')
-
-def desenhar_tabela_pdf(pdf, df_tabela, titulo):
-    if df_tabela is None or df_tabela.empty:
-        return
-
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.set_text_color(30, 35, 42)
-    pdf.cell(0, 7, titulo, new_x="LMARGIN", new_y="NEXT", align="L")
-    pdf.ln(1)
-
-    colunas = list(df_tabela.columns)
-    largura_disponivel = 190
-    largura_col = largura_disponivel / len(colunas)
-
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.set_fill_color(30, 35, 42)
-    pdf.set_text_color(255, 255, 255)
-    for col in colunas:
-        pdf.cell(largura_col, 6, str(col), border=1, align="C", fill=True)
-    pdf.ln()
-
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(40, 40, 40)
-    for idx, row in df_tabela.iterrows():
-        if pdf.get_y() > 260:
-            pdf.add_page()
-            pdf.set_font("Helvetica", "B", 8)
-            pdf.set_fill_color(30, 35, 42)
-            pdf.set_text_color(255, 255, 255)
-            for col in colunas:
-                pdf.cell(largura_col, 6, str(col), border=1, align="C", fill=True)
-            pdf.ln()
-            pdf.set_font("Helvetica", "", 8)
-            pdf.set_text_color(40, 40, 40)
-
-        fill = idx % 2 == 0
-        pdf.set_fill_color(245, 247, 250) if fill else pdf.set_fill_color(255, 255, 255)
-        for col in colunas:
-            pdf.cell(largura_col, 5, str(row[col]), border=1, align="C", fill=True)
-        pdf.ln()
-    pdf.ln(5)
-
-def adicionar_grafico_pdf(pdf, fig, titulo):
-    if fig is None:
-        return
-    try:
-        # Gera o PNG via Kaleido na memória (sem usar o parâmetro descontinuado engine='kaleido')
-        img_bytes = fig.to_image(format="png", width=800, height=450)
-        
-        # Salva em arquivo temporário para inserção no FPDF
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            tmp.write(img_bytes)
-            tmp_path = tmp.name
-
-        if pdf.get_y() > 200:
-            pdf.add_page()
-
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.set_text_color(30, 35, 42)
-        pdf.cell(0, 7, titulo, new_x="LMARGIN", new_y="NEXT", align="L")
-        pdf.ln(2)
-
-        pdf.image(tmp_path, w=180)
-        pdf.ln(5)
-
-        os.remove(tmp_path)
-    except Exception as e:
-        pdf.set_font("Helvetica", "I", 8)
-        pdf.set_text_color(200, 0, 0)
-        pdf.cell(0, 5, f"[Erro ao renderizar imagem do gráfico: instale o pacote 'kaleido' via 'pip install kaleido']", new_x="LMARGIN", new_y="NEXT")
-
-def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None, df_todos_centros=None, df_todas_marcas=None, lista_figuras=None):
-    pdf = PDFReport(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-
-    # Cards de KPIs
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.set_text_color(30, 35, 42)
-    pdf.cell(0, 6, "Resumo dos Indicadores (KPIs)", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(2)
-
-    largura_card = 44
-    altura_card = 16
-    x_inicial = 10
-    y_kpi = pdf.get_y()
-
-    for idx, (rotulo, valor) in enumerate(kpis_dict.items()):
-        x_pos = x_inicial + (idx * (largura_card + 3.5))
-        pdf.set_fill_color(240, 243, 246)
-        pdf.rect(x_pos, y_kpi, largura_card, altura_card, style='F')
-        
-        pdf.set_xy(x_pos + 2, y_kpi + 2)
-        pdf.set_text_color(100, 100, 100)
-        pdf.set_font("Helvetica", "", 7)
-        pdf.cell(largura_card - 4, 4, str(rotulo), align='L')
-        
-        pdf.set_xy(x_pos + 2, y_kpi + 8)
-        pdf.set_text_color(20, 90, 160)
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(largura_card - 4, 5, str(valor), align='L')
-
-    pdf.set_y(y_kpi + altura_card + 6)
-
-    # Adiciona Gráficos se fornecidos
-    if lista_figuras:
-        for titulo_graf, fig_obj in lista_figuras:
-            if fig_obj is not None:
-                adicionar_grafico_pdf(pdf, fig_obj, titulo_graf)
-
-    # Tabelas executivas
-    desenhar_tabela_pdf(pdf, df_top_centros, "Top 10 Centros com Maior Perda")
-    desenhar_tabela_pdf(pdf, df_top_marcas, "Top 10 Marcas com Maior Perda")
-
-    if df_todos_centros is not None and not df_todos_centros.empty:
-        desenhar_tabela_pdf(pdf, df_todos_centros, "Detalhamento Geral de Perda por Centro")
-
-    if df_todas_marcas is not None and not df_todas_marcas.empty:
-        desenhar_tabela_pdf(pdf, df_todas_marcas, "Detalhamento Geral de Perda por Marca")
-
-    return bytes(pdf.output())
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -594,14 +451,6 @@ def renderizar_dashboard():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        df_top10_centros_export = None
-        df_top10_marcas_export = None
-        df_todos_centros_export = None
-        df_todas_marcas_export = None
-        
-        # Coleção de figuras para renderizar no PDF via Kaleido
-        figuras_pdf = []
-
         if perfil_usuario == "Administrador":
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
 
@@ -641,7 +490,6 @@ def renderizar_dashboard():
             )
             st.plotly_chart(fig_reg_comp, use_container_width=True)
             st.markdown("<br>", unsafe_allow_html=True)
-            figuras_pdf.append(("Comparativo por Divisão Regional", fig_reg_comp))
 
         if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]: 
             graf_col1, graf_col2 = st.columns(2)
@@ -675,7 +523,6 @@ def renderizar_dashboard():
                     yaxis_title=""
                 )
                 st.plotly_chart(fig_qtd_lojas, use_container_width=True)
-                figuras_pdf.append(("Perda por Centro (Qtd)", fig_qtd_lojas))
 
             with graf_col2:
                 st.subheader("🎯 Perda por Centro (R$)")
@@ -706,7 +553,6 @@ def renderizar_dashboard():
                     yaxis_title=""
                 )
                 st.plotly_chart(fig_lojas, use_container_width=True)
-                figuras_pdf.append(("Perda por Centro (R$)", fig_lojas))
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader("🏢 Ranking: Top 10 Centros com Maior Perda")
@@ -731,11 +577,6 @@ def renderizar_dashboard():
             df_top10_centros['Perda (R$)'] = df_top10_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
             st.dataframe(df_top10_centros, use_container_width=True, hide_index=True)
-            df_top10_centros_export = df_top10_centros.copy()
-
-            df_todos_centros_export = df_centros_completo.copy()
-            df_todos_centros_export['Perda (Qtd)'] = df_todos_centros_export['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-            df_todos_centros_export['Perda (R$)'] = df_todos_centros_export['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("⚠️ Ranking: Top 10 Marcas com Maior Perda")
@@ -760,11 +601,6 @@ def renderizar_dashboard():
         df_top10_marcas['Perda (R$)'] = df_top10_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
         st.dataframe(df_top10_marcas, use_container_width=True, hide_index=True)
-        df_top10_marcas_export = df_top10_marcas.copy()
-
-        df_todas_marcas_export = df_marcas_completo.copy()
-        df_todas_marcas_export['Perda (Qtd)'] = df_todas_marcas_export['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-        df_todas_marcas_export['Perda (R$)'] = df_todas_marcas_export['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
 
         st.markdown("<br>", unsafe_allow_html=True)
         marca_col1, marca_col2 = st.columns(2)
@@ -802,7 +638,6 @@ def renderizar_dashboard():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_marca_qtd, use_container_width=True)
-            figuras_pdf.append(("Perdas por Marca - Todas (Qtd)", fig_marca_qtd))
 
         with marca_col2:
             st.subheader("🏷️ Perdas por Marca - Todas (R$)")
@@ -835,37 +670,6 @@ def renderizar_dashboard():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_marca_rs, use_container_width=True)
-            figuras_pdf.append(("Perdas por Marca - Todas (R$)", fig_marca_rs))
-
-        # --- SEÇÃO DE EXPORTAÇÃO DO RELATÓRIO PDF ---
-        st.markdown("---")
-        st.subheader("📄 Exportação do Relatório Executivo (PDF)")
-        
-        dic_kpis = {
-            "Total de Perdas": formatar_qtd(perda_total_un),
-            "Perda Total (R$)": formatar_moeda(perda_total_rs),
-            "Sobras / Ajustes": formatar_moeda(sobra_total_rs),
-            "Resultado Net": formatar_moeda(resultado_net)
-        }
-
-        try:
-            bytes_pdf = gerar_pdf_dashboard(
-                dic_kpis, 
-                df_top_centros=df_top10_centros_export, 
-                df_top_marcas=df_top10_marcas_export,
-                df_todos_centros=df_todos_centros_export,
-                df_todas_marcas=df_todas_marcas_export,
-                lista_figuras=figuras_pdf
-            )
-            st.download_button(
-                label="📄 Baixar Relatório Executivo em PDF com Gráficos (.pdf)",
-                data=bytes_pdf,
-                file_name="relatorio_executivo_inventario.pdf",
-                mime="application/pdf",
-                type="primary"
-            )
-        except Exception as err:
-            st.warning(f"⚠️ Erro ao gerar PDF: {err}")
 
     except Exception as e:
         st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
