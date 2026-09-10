@@ -10,7 +10,7 @@ import tempfile
 from fpdf import FPDF
 
 # =========================================================
-# DECLARAÇÃO DAS FUNÇÕES DO PDF (COM SUPORTE A KALEIDO / IMAGENS)
+# DECLARAÇÃO DAS FUNÇÕES DO PDF (COM TRATAMENTO DO KALEIDO)
 # =========================================================
 
 class PDFReport(FPDF):
@@ -74,7 +74,7 @@ def adicionar_grafico_pdf(pdf, fig, titulo):
     if fig is None:
         return
     try:
-        # Gera o PNG via Kaleido na memória
+        # Gera o PNG via Kaleido na memória (sem usar o parâmetro descontinuado engine='kaleido')
         img_bytes = fig.to_image(format="png", width=800, height=450)
         
         # Salva em arquivo temporário para inserção no FPDF
@@ -97,7 +97,7 @@ def adicionar_grafico_pdf(pdf, fig, titulo):
     except Exception as e:
         pdf.set_font("Helvetica", "I", 8)
         pdf.set_text_color(200, 0, 0)
-        pdf.cell(0, 5, f"[Erro ao renderizar imagem do gráfico: {e}]", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 5, f"[Erro ao renderizar imagem do gráfico: instale o pacote 'kaleido' via 'pip install kaleido']", new_x="LMARGIN", new_y="NEXT")
 
 def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None, df_todos_centros=None, df_todas_marcas=None, lista_figuras=None):
     pdf = PDFReport(orientation='P', unit='mm', format='A4')
@@ -132,7 +132,7 @@ def gerar_pdf_dashboard(kpis_dict, df_top_centros=None, df_top_marcas=None, df_t
 
     pdf.set_y(y_kpi + altura_card + 6)
 
-    # Adiciona Gráficos (gerados com Kaleido) se fornecidos
+    # Adiciona Gráficos se fornecidos
     if lista_figuras:
         for titulo_graf, fig_obj in lista_figuras:
             if fig_obj is not None:
