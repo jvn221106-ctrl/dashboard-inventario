@@ -144,6 +144,7 @@ def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removi
     
     historico = dados_usr.get("historico_senhas", [])
     
+    # Valida se a nova senha já está na senha atual ou no histórico de até 3 senhas
     if novo_hash == dados_usr.get("senha") or novo_hash in historico:
         return False, "⚠️ Por motivos de segurança, você não pode reutilizar nenhuma das suas últimas 3 senhas."
     
@@ -305,6 +306,8 @@ def renderizar_tela_troca_obrigatoria():
             st.error("As senhas não coincidem.")
             return
 
+        # Como o histórico já contem a senha antiga (salva na hora do reset pelo admin),
+        # esta chamada vai barrar a tentativa se o usuário digitar a senha que ele havia esquecido!
         sucesso, msg = atualizar_senha_com_historico(
             email_logado, nova_senha, usuarios, removidos, historico_remocoes
         )
@@ -387,12 +390,20 @@ def renderizar_aba_admin():
                 novo_hash_temp = gerar_hash(senha_temp)
                 dados_usr = usuarios[usuario_selecionado]
                 historico = dados_usr.get("historico_senhas", [])
+                senha_atual_esquecida = dados_usr.get("senha")
 
-                if novo_hash_temp == dados_usr.get("senha") or novo_hash_temp in historico:
-                    st.error("⚠️ Por motivos de segurança, você não pode reutilizar nenhuma das últimas 3 senhas do usuário.")
+                # Checa se a senha temporária criada pelo Admin não repete a senha esquecida nem o histórico
+                if novo_hash_temp == senha_atual_esquecida or novo_hash_temp in historico:
+                    st.error("⚠️ A senha temporária não pode ser igual às últimas 3 senhas do usuário.")
                 else:
-                    usuarios[usuario_selecionado]["senha"] = novo_hash_temp
-                    usuarios[usuario_selecionado]["forcar_redefinicao"] = True
+                    # AJUSTE CHAVE: guarda a senha que o usuário ESQUECEU no histórico
+                    # para que ele não consiga reutilizá-la ao criar a nova senha!
+                    if senha_atual_esquecida:
+                        historico.insert(0, senha_atual_esquecida)
+                        dados_usr["historico_senhas"] = historico[:3]
+
+                    dados_usr["senha"] = novo_hash_temp
+                    dados_usr["forcar_redefinicao"] = True
                     salvar_dados_db(usuarios, removidos, historico_remocoes)
                     st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
 
