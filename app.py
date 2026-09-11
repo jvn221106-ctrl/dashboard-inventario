@@ -281,7 +281,7 @@ def renderizar_tela_login():
 
     st.markdown("---")
     with st.expander("❓ Esqueceu a senha?"):
-        st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinição de senha.")
+        st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinição de sua senha.\n\n⚠️ *Lembre-se: Por motivos de segurança, você não poderá reutilizar nenhuma das suas últimas 3 senhas.*")
 
 # --- TELA OBRIGATÓRIA DE REDEFINIÇÃO DE SENHA ---
 def renderizar_tela_troca_obrigatoria():
@@ -384,10 +384,17 @@ def renderizar_aba_admin():
             if not senha_temp or len(senha_temp) < 6:
                 st.error("A senha deve ter pelo menos 6 caracteres.")
             else:
-                usuarios[usuario_selecionado]["senha"] = gerar_hash(senha_temp)
-                usuarios[usuario_selecionado]["forcar_redefinicao"] = True
-                salvar_dados_db(usuarios, removidos, historico_remocoes)
-                st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
+                novo_hash_temp = gerar_hash(senha_temp)
+                dados_usr = usuarios[usuario_selecionado]
+                historico = dados_usr.get("historico_senhas", [])
+
+                if novo_hash_temp == dados_usr.get("senha") or novo_hash_temp in historico:
+                    st.error("⚠️ Por motivos de segurança, você não pode reutilizar nenhuma das últimas 3 senhas do usuário.")
+                else:
+                    usuarios[usuario_selecionado]["senha"] = novo_hash_temp
+                    usuarios[usuario_selecionado]["forcar_redefinicao"] = True
+                    salvar_dados_db(usuarios, removidos, historico_remocoes)
+                    st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
 
     st.markdown("---")
 
@@ -748,7 +755,6 @@ else:
     usr_atual = st.session_state["usuario_atual"]
 
     # --- REVALIDAÇÃO DE SESSÃO EM TEMPO REAL ---
-    # Se o usuário foi removido do JSON ou está na lista de removidos, cancela a sessão imediatamente
     if usr_atual in removidos_set or usr_atual not in usuarios_db:
         st.session_state["logado"] = False
         st.session_state["usuario_atual"] = None
