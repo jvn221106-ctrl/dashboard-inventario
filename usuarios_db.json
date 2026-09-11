@@ -1,0 +1,244 @@
+{
+    "usuarios": {
+        "sara.leite@vonnycosmeticos.com.br": {
+            "loja": "B001",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "julio.fonseca@vonnycosmeticos.com.br": {
+            "loja": "B002",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "fabiana.bertassi@vonnycosmeticos.com.br": {
+            "loja": "B006",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "vanessa.tais@vonnycosmeticos.com.br": {
+            "loja": "B007",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "yara.silva@vonnycosmeticos.com.br": {
+            "loja": "B008",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "josemary.bezerra@vonnycosmeticos.com.br": {
+            "loja": "B009",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "maria.beserra@vonnycosmeticos.com.br": {
+            "loja": "B010",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "gislaine.barra@vonnycosmeticos.com.br": {
+            "loja": "B011",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "thamires.conceicao@vonnycosmeticos.com.br": {
+            "loja": "B012",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "vera.silva@vonnycosmeticos.com.br": {
+            "loja": "B013",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "vanessa.amaral@vonnycosmeticos.com.br": {
+            "loja": "B015",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "claudineia.mendes@vonnycosmeticos.com.br": {
+            "loja": "B016",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "thatiane.ferreira@vonnycosmeticos.com.br": {
+            "loja": "B017",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "katiane.silva@vonnycosmeticos.com.br": {
+            "loja": "B018",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "lanny.andryelly@vonnycosmeticos.com.br": {
+            "loja": "B019",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "suzana.silveira@vonnycosmeticos.com.br": {
+            "loja": "B020",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "luciana.vasconcelos@vonnycosmeticos.com.br": {
+            "loja": "B021",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "wagner.valle@casadolojista.com.br": {
+            "loja": "B001,B002,B006,B007,B008,B009,B010,B011,B012,B018,B030",
+            "perfil": "Regional 2",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "daiane.martins@vonnycosmeticos.com.br": {
+            "loja": "B022",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "gisele.trampusch@vonnycosmeticos.com.br": {
+            "loja": "B023",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "raquel.lopes@vonnycosmeticos.com.br": {
+            "loja": "B024",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "claudinea.santos@vonnycosmeticos.com.br": {
+            "loja": "B025",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "rosania.chagas@vonnycosmeticos.com.br": {
+            "loja": "B026",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "luana.costa@vonnycosmeticos.com.br": {
+            "loja": "B027",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "rosangela.botelho@vonnycosmeticos.com.br": {
+            "loja": "B028",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "elza.silva@vonnycosmeticos.com.br": {
+            "loja": "B029",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "joao.pereira@vonnycosmeticos.com.br": {
+            "loja": "B030",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "jorgiane.aragao@vonnycosmeticos.com.br": {
+            "loja": "B031",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "jvn221106@gmail.com": {
+            "loja": "TODAS",
+            "perfil": "Administrador",
+            "senha": "41ef6aecf3e9f9ee920d39b5d9a816afe6e6c917f373b90b7f9e14b8324fcece",
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "sergio.oliveira@vonnycosmeticos.com.br": {
+            "loja": "TODAS",
+            "perfil": "Administrador",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "controladoriaprevencao@gmail.com": {
+            "loja": "TODAS",
+            "perfil": "Administrador",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "josue.victor@vonnycosmeticos.com.br": {
+            "loja": "TODAS",
+            "perfil": "Administrador",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "vanusia.garcia@casadolojista.com.br": {
+            "loja": "TODAS",
+            "perfil": "Administrador",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "luciana.valle@vonnycosmeticos.com.br": {
+            "loja": "B013,B015,B016,B017,B019,B020,B021,B022,B023,B024,B025,B026,B027,B028,B029,B031,B032",
+            "perfil": "Regional 1",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        }
+    },
+    "removidos": [],
+    "historico_remocoes": []
+}
