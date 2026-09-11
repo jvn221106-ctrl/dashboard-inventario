@@ -375,7 +375,7 @@ def renderizar_aba_admin():
 
     st.markdown("---")
 
-    st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
+st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
     col1, col2 = st.columns([2, 1])
     with col1:
         usuario_selecionado = st.selectbox("Selecione o e-mail:", options=list(usuarios.keys()), key="select_reset_senha")
@@ -392,20 +392,16 @@ def renderizar_aba_admin():
                 historico = dados_usr.get("historico_senhas", [])
                 senha_atual_esquecida = dados_usr.get("senha")
 
-                # Checa se a senha temporária criada pelo Admin não repete a senha esquecida nem o histórico
-                if novo_hash_temp == senha_atual_esquecida or novo_hash_temp in historico:
-                    st.error("⚠️ A senha temporária não pode ser igual às últimas 3 senhas do usuário.")
-                else:
-                    # AJUSTE CHAVE: guarda a senha que o usuário ESQUECEU no histórico
-                    # para que ele não consiga reutilizá-la ao criar a nova senha!
-                    if senha_atual_esquecida:
-                        historico.insert(0, senha_atual_esquecida)
-                        dados_usr["historico_senhas"] = historico[:3]
+                # Salva a senha esquecida no histórico para o usuário não poder reutilizá-la depois
+                if senha_atual_esquecida and senha_atual_esquecida not in historico:
+                    historico.insert(0, senha_atual_esquecida)
+                    dados_usr["historico_senhas"] = historico[:3]
 
-                    dados_usr["senha"] = novo_hash_temp
-                    dados_usr["forcar_redefinicao"] = True
-                    salvar_dados_db(usuarios, removidos, historico_remocoes)
-                    st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
+                # Define a senha temporária e força a redefinição pelo usuário
+                dados_usr["senha"] = novo_hash_temp
+                dados_usr["forcar_redefinicao"] = True
+                salvar_dados_db(usuarios, removidos, historico_remocoes)
+                st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
 
     st.markdown("---")
 
