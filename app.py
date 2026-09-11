@@ -468,52 +468,68 @@ def renderizar_aba_admin():
 
     st.markdown("---")
 
-    # --- SEÇÃO DE IMPORTAÇÃO E EXPORTAÇÃO APENAS DOS LOGS DE AUDITORIA ---
+    # --- SEÇÃO DE IMPORTAÇÃO E EXPORTAÇÃO APENAS DOS LOGS DE AUDITORIA EM EXCEL ---
     st.subheader("📦 Backup e Restauração dos Históricos (Audit Logs)")
     
     col_exp, col_imp = st.columns(2)
 
     with col_exp:
-        audit_data = {
-            "historico_resets": historico_resets,
-            "historico_remocoes": historico_remocoes
-        }
-        json_audit = json.dumps(audit_data, indent=4)
+        df_exp_resets = pd.DataFrame(historico_resets if historico_resets else [{
+            "usuario_afetado": "",
+            "resetado_por": "",
+            "data_hora": ""
+        }])
+        df_exp_remocoes = pd.DataFrame(historico_remocoes if historico_remocoes else [{
+            "usuario_removido": "",
+            "removido_por": "",
+            "data_hora": ""
+        }])
+
+        output_audit = io.BytesIO()
+        with pd.ExcelWriter(output_audit, engine='openpyxl') as writer:
+            df_exp_resets.to_excel(writer, index=False, sheet_name='Historico_Resets')
+            df_exp_remocoes.to_excel(writer, index=False, sheet_name='Historico_Remocoes')
         
+        excel_audit_bytes = output_audit.getvalue()
+
         st.download_button(
-            label="📥 Exportar Históricos (JSON)",
-            data=json_audit,
-            file_name=f"historico_auditoria_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
+            label="📥 Exportar Históricos (Excel)",
+            data=excel_audit_bytes,
+            file_name=f"historico_auditoria_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="secondary"
         )
 
     with col_imp:
-        uploaded_file = st.file_uploader("Importar Arquivo de Históricos (JSON)", type=["json"], key="upload_audit_logs")
+        uploaded_file = st.file_uploader("Importar Arquivo de Históricos (Excel)", type=["xlsx", "xls"], key="upload_audit_logs")
         if uploaded_file is not None:
             try:
-                data_imported = json.load(uploaded_file)
-                resets_importados = data_imported.get("historico_resets", [])
-                remocoes_importadas = data_imported.get("historico_remocoes", [])
-
+                xls_import = pd.ExcelFile(uploaded_file)
+                
                 novos_resets = 0
-                for item in resets_importados:
-                    if item not in historico_resets:
-                        historico_resets.append(item)
-                        novos_resets += 1
+                if "Historico_Resets" in xls_import.sheet_names:
+                    df_imp_resets = pd.read_excel(xls_import, sheet_name="Historico_Resets").fillna("")
+                    resets_importados = df_imp_resets.to_dict(orient="records")
+                    for item in resets_importados:
+                        if item.get("usuario_afetado") and item not in historico_resets:
+                            historico_resets.append(item)
+                            novos_resets += 1
 
                 novas_remocoes = 0
-                for item in remocoes_importadas:
-                    if item not in historico_remocoes:
-                        historico_remocoes.append(item)
-                        novas_remocoes += 1
+                if "Historico_Remocoes" in xls_import.sheet_names:
+                    df_imp_remocoes = pd.read_excel(xls_import, sheet_name="Historico_Remocoes").fillna("")
+                    remocoes_importadas = df_imp_remocoes.to_dict(orient="records")
+                    for item in remocoes_importadas:
+                        if item.get("usuario_removido") and item not in historico_remocoes:
+                            historico_remocoes.append(item)
+                            novas_remocoes += 1
 
                 if novos_resets > 0 or novas_remocoes > 0:
                     salvar_dados_db(usuarios, removidos, historico_remocoes, historico_resets)
                     st.success(f"✅ Históricos importados com sucesso! ({novos_resets} resets e {novas_remocoes} remoções adicionados)")
                     st.rerun()
                 else:
-                    st.info("ℹ️ Os históricos importados já existem na base atual.")
+                    st.info("ℹ️ Os históricos importados já existem na base atual ou a planilha está vazia.")
             except Exception as e:
                 st.error(f"Erro ao processar o arquivo de importação: {e}")
 
