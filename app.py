@@ -746,6 +746,16 @@ elif st.session_state["troca_obrigatoria"]:
 else:
     usuarios_db, removidos_set, historico_remocoes = carregar_dados_db()
     usr_atual = st.session_state["usuario_atual"]
+
+    # --- REVALIDAÇÃO DE SESSÃO EM TEMPO REAL ---
+    # Se o usuário foi removido do JSON ou está na lista de removidos, cancela a sessão imediatamente
+    if usr_atual in removidos_set or usr_atual not in usuarios_db:
+        st.session_state["logado"] = False
+        st.session_state["usuario_atual"] = None
+        st.session_state["troca_obrigatoria"] = False
+        st.error("🔒 Sua conta foi desativada ou removida. Você foi desconectado.")
+        st.rerun()
+
     dados_logado = usuarios_db.get(usr_atual, {})
 
     st.sidebar.markdown(f"👤 **Usuário:** `{usr_atual}`\n\n💼 **Cargo:** `{dados_logado.get('perfil', 'Gerente')}`")
