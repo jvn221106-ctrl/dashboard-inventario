@@ -91,14 +91,17 @@ def carregar_dados_db():
                 usuarios = data["usuarios"]
                 removidos = set(data.get("removidos", []))
                 historico_remocoes = data.get("historico_remocoes", [])
+                historico_resets = data.get("historico_resets", [])
             else:
                 usuarios = data
                 removidos = set()
                 historico_remocoes = []
+                historico_resets = []
     else:
         usuarios = {}
         removidos = set()
         historico_remocoes = []
+        historico_resets = []
 
     atualizou = False
     for email, (loja, perfil_padrao) in EMAILS_PERMITIDOS_PADRAO.items():
@@ -121,30 +124,32 @@ def carregar_dados_db():
                 atualizou = True
 
     if atualizou or not os.path.exists(DB_FILE):
-        salvar_dados_db(usuarios, removidos, historico_remocoes)
+        salvar_dados_db(usuarios, removidos, historico_remocoes, historico_resets)
 
-    return usuarios, removidos, historico_remocoes
+    return usuarios, removidos, historico_remocoes, historico_resets
 
-def salvar_dados_db(usuarios, removidos, historico_remocoes=None):
+def salvar_dados_db(usuarios, removidos, historico_remocoes=None, historico_resets=None):
     if historico_remocoes is None:
         historico_remocoes = []
+    if historico_resets is None:
+        historico_resets = []
     with open(DB_FILE, "w") as f:
         json.dump({
             "usuarios": usuarios,
             "removidos": list(removidos),
-            "historico_remocoes": historico_remocoes
+            "historico_remocoes": historico_remocoes,
+            "historico_resets": historico_resets
         }, f, indent=4)
 
 def gerar_hash(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
-def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removidos_set, historico_remocoes):
+def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removidos_set, historico_remocoes, historico_resets):
     novo_hash = gerar_hash(nova_senha_texto)
     dados_usr = usuarios_dict[email]
     
     historico = dados_usr.get("historico_senhas", [])
     
-    # Valida se a nova senha já está na senha atual ou no histórico de até 3 senhas
     if novo_hash == dados_usr.get("senha") or novo_hash in historico:
         return False, "⚠️ Por motivos de segurança, você não pode reutilizar nenhuma das suas últimas 3 senhas."
     
@@ -155,7 +160,7 @@ def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removi
     dados_usr["senha"] = novo_hash
     dados_usr["forcar_redefinicao"] = False
     
-    salvar_dados_db(usuarios_dict, removidos_set, historico_remocoes)
+    salvar_dados_db(usuarios_dict, removidos_set, historico_remocoes, historico_resets)
     return True, "✅ Senha alterada com sucesso!"
 
 # --- LEITURA E TRATAMENTO DA PLANILHA NUVEM ---
@@ -235,7 +240,7 @@ def renderizar_tela_login():
     st.title("🔒 Vonny Cosméticos - Acesso ao Sistema")
     st.write("Digite seu e-mail corporativo para acessar os indicadores.")
 
-    usuarios, removidos, historico_remocoes = carregar_dados_db()
+    usuarios, removidos, historico_remocoes, historico_resets = carregar_dados_db()
 
     with st.form("form_login"):
         email_input = st.text_input("E-mail corporativo:").strip().lower()
@@ -258,7 +263,7 @@ def renderizar_tela_login():
                 st.warning("⚠️ **Primeiro Acesso:** Defina uma senha de no mínimo 6 caracteres e clique em entrar novamente.")
             else:
                 sucesso, msg = atualizar_senha_com_historico(
-                    email_input, senha_input, usuarios, removidos, historico_remocoes
+                    email_input, senha_input, usuarios, removidos, historico_remocoes, historico_resets
                 )
                 if sucesso:
                     st.session_state["logado"] = True
@@ -289,7 +294,7 @@ def renderizar_tela_troca_obrigatoria():
     st.title("🔑 Redefinição de Senha Obrigatória")
     st.warning("Você acessou com uma **senha temporária**. Escolha uma nova senha definitiva para continuar.")
 
-    usuarios, removidos, historico_remocoes = carregar_dados_db()
+    usuarios, removidos, historico_remocoes, historico_resets = carregar_dados_db()
     email_logado = st.session_state["usuario_atual"]
 
     with st.form("form_troca_obrigatoria"):
@@ -307,7 +312,7 @@ def renderizar_tela_troca_obrigatoria():
             return
 
         sucesso, msg = atualizar_senha_com_historico(
-            email_logado, nova_senha, usuarios, removidos, historico_remocoes
+            email_logado, nova_senha, usuarios, removidos, historico_remocoes, historico_resets
         )
         if sucesso:
             st.session_state["troca_obrigatoria"] = False
@@ -319,7 +324,7 @@ def renderizar_tela_troca_obrigatoria():
 # --- ABA PAINEL ADMIN ---
 def renderizar_aba_admin():
     st.header("⚙️ Painel do Administrador")
-    usuarios, removidos, historico_remocoes = carregar_dados_db()
+    usuarios, removidos, historico_remocoes, historico_resets = carregar_dados_db()
 
     st.subheader("👥 Lista de Usuários e Status")
     dados_tabela = []
@@ -368,7 +373,7 @@ def renderizar_aba_admin():
                     }
                     st.success(f"🎉 Usuário **{novo_email}** cadastrado!")
                 
-                salvar_dados_db(usuarios, removidos, historico_remocoes)
+                salvar_dados_db(usuarios, removidos, historico_remocoes, historico_resets)
                 st.rerun()
 
     st.markdown("---")
@@ -385,6 +390,7 @@ def renderizar_aba_admin():
             if not senha_temp or len(senha_temp) < 6:
                 st.error("A senha deve ter pelo menos 6 caracteres.")
             else:
+                admin_atual = st.session_state["usuario_atual"]
                 novo_hash_temp = gerar_hash(senha_temp)
                 dados_usr = usuarios[usuario_selecionado]
                 historico = dados_usr.get("historico_senhas", [])
@@ -396,8 +402,17 @@ def renderizar_aba_admin():
 
                 dados_usr["senha"] = novo_hash_temp
                 dados_usr["forcar_redefinicao"] = True
-                salvar_dados_db(usuarios, removidos, historico_remocoes)
-                st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
+
+                # --- REGISTRO DE AUDITORIA DE RESET ---
+                registro_reset = {
+                    "usuario_afetado": usuario_selecionado,
+                    "resetado_por": admin_atual,
+                    "data_hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                }
+                historico_resets.append(registro_reset)
+
+                salvar_dados_db(usuarios, removidos, historico_remocoes, historico_resets)
+                st.success(f"✅ Senha temporária definida para **{usuario_selecionado}** por **{admin_atual}**!")
 
     st.markdown("---")
 
@@ -423,28 +438,45 @@ def renderizar_aba_admin():
                 del usuarios[user_para_deletar]
                 removidos.add(user_para_deletar)
 
-                salvar_dados_db(usuarios, removidos, historico_remocoes)
+                salvar_dados_db(usuarios, removidos, historico_remocoes, historico_resets)
                 st.success(f"🗑️ Usuário **{user_para_deletar}** removido por **{admin_atual}**!")
                 st.rerun()
 
     st.markdown("---")
 
-    st.subheader("📋 Histórico de Remoções (Auditoria)")
-    if historico_remocoes:
-        df_historico = pd.DataFrame(historico_remocoes)
-        df_historico.rename(columns={
-            "usuario_removido": "Usuário Removido",
-            "removido_por": "Removido por (Admin)",
-            "data_hora": "Data e Horário"
-        }, inplace=True)
-        st.dataframe(df_historico, use_container_width=True, hide_index=True)
-    else:
-        st.info("Nenhuma remoção registrada até o momento.")
+    # --- TABELAS DE AUDITORIA ---
+    col_audit1, col_audit2 = st.columns(2)
+
+    with col_audit1:
+        st.subheader("🔑 Histórico de Resets de Senha")
+        if historico_resets:
+            df_resets = pd.DataFrame(historico_resets)
+            df_resets.rename(columns={
+                "usuario_afetado": "Usuário Afetado",
+                "resetado_por": "Resetado por (Admin)",
+                "data_hora": "Data e Horário"
+            }, inplace=True)
+            st.dataframe(df_resets, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum reset de senha registrado até o momento.")
+
+    with col_audit2:
+        st.subheader("📋 Histórico de Remoções")
+        if historico_remocoes:
+            df_historico = pd.DataFrame(historico_remocoes)
+            df_historico.rename(columns={
+                "usuario_removido": "Usuário Removido",
+                "removido_por": "Removido por (Admin)",
+                "data_hora": "Data e Horário"
+            }, inplace=True)
+            st.dataframe(df_historico, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhuma remoção registrada até o momento.")
 
 # --- DASHBOARD VISUAL DE INVENTÁRIO ---
 def renderizar_dashboard():
     try:
-        usuarios, _, _ = carregar_dados_db()
+        usuarios, _, _, _ = carregar_dados_db()
         email_logado = st.session_state["usuario_atual"]
         dados_usr = usuarios.get(email_logado, {})
         
@@ -754,7 +786,7 @@ elif st.session_state["troca_obrigatoria"]:
     renderizar_tela_troca_obrigatoria()
 
 else:
-    usuarios_db, removidos_set, historico_remocoes = carregar_dados_db()
+    usuarios_db, removidos_set, historico_remocoes, historico_resets = carregar_dados_db()
     usr_atual = st.session_state["usuario_atual"]
 
     # --- REVALIDAÇÃO DE SESSÃO EM TEMPO REAL ---
@@ -777,7 +809,7 @@ else:
             btn_mudar_sb = st.form_submit_button("Atualizar Senha")
 
             if btn_mudar_sb:
-                usuarios_dict, removidos_set, historico_remocoes = carregar_dados_db()
+                usuarios_dict, removidos_set, historico_remocoes, historico_resets = carregar_dados_db()
                 
                 if gerar_hash(senha_antiga_sb) != usuarios_dict[usr_atual]["senha"]:
                     st.error("Senha atual incorreta.")
@@ -787,7 +819,7 @@ else:
                     st.error("Senhas não conferem.")
                 else:
                     sucesso, msg = atualizar_senha_com_historico(
-                        usr_atual, nova_senha_sb, usuarios_dict, removidos_set, historico_remocoes
+                        usr_atual, nova_senha_sb, usuarios_dict, removidos_set, historico_remocoes, historico_resets
                     )
                     if sucesso:
                         st.success(msg)
