@@ -378,11 +378,21 @@ def renderizar_aba_admin():
 
     st.markdown("---")
 
-    st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
+st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
     col1, col2 = st.columns([2, 1])
     with col1:
         usuario_selecionado = st.selectbox("Selecione o e-mail:", options=list(usuarios.keys()), key="select_reset_senha")
-        senha_temp = st.text_input("Senha Temporária:", type="password", key="input_senha_temp")
+        
+        # Campo preenchido por padrão com 'Vonny123'
+        senha_temp = st.text_input(
+            "Senha Temporária:", 
+            value="Vonny123", 
+            type="password", 
+            key="input_senha_temp"
+        )
+        
+        # Texto exibido logo abaixo do campo (área destacada em vermelho)
+        st.caption("🔑 Senha padrão inicial: **Vonny123**")
 
     with col2:
         st.write("##")
