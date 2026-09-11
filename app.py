@@ -7,6 +7,7 @@ import hashlib
 import requests
 import io
 import datetime
+import re
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -81,6 +82,13 @@ EMAILS_PERMITIDOS_PADRAO = {
 }
 
 OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Regional 1", "Regional 2", "Administrador"]
+
+# --- VALIDAÇÃO DE COMPLEXIDADE DE SENHA ---
+def validar_complexidade_senha(senha):
+    padrao = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$"
+    if not re.match(padrao, senha):
+        return False, "⚠️ A senha deve conter pelo menos 6 caracteres, incluindo uma letra maiúscula, uma letra minúscula e um número."
+    return True, ""
 
 # --- FUNÇÕES DE BANCO DE DADOS E AUTENTICAÇÃO ---
 def carregar_dados_db():
@@ -259,8 +267,9 @@ def renderizar_tela_login():
         dados_usuario = usuarios[email_input]
 
         if dados_usuario["senha"] is None:
-            if not senha_input or len(senha_input) < 6:
-                st.warning("⚠️ **Primeiro Acesso:** Defina uma senha de no mínimo 6 caracteres e clique em entrar novamente.")
+            valida, msg_validacao = validar_complexidade_senha(senha_input)
+            if not valida:
+                st.warning(f"⚠️ **Primeiro Acesso:** {msg_validacao}")
             else:
                 sucesso, msg = atualizar_senha_com_historico(
                     email_input, senha_input, usuarios, removidos, historico_remocoes, historico_resets
@@ -298,13 +307,14 @@ def renderizar_tela_troca_obrigatoria():
     email_logado = st.session_state["usuario_atual"]
 
     with st.form("form_troca_obrigatoria"):
-        nova_senha = st.text_input("Nova Senha (mínimo 6 caracteres):", type="password")
+        nova_senha = st.text_input("Nova Senha:", type="password")
         confirma_nova = st.text_input("Confirme a Nova Senha:", type="password")
         btn_salvar = st.form_submit_button("Salvar Nova Senha", type="primary")
 
     if btn_salvar:
-        if len(nova_senha) < 6:
-            st.error("A nova senha deve ter no mínimo 6 caracteres.")
+        valida, msg_validacao = validar_complexidade_senha(nova_senha)
+        if not valida:
+            st.error(msg_validacao)
             return
 
         if nova_senha != confirma_nova:
@@ -383,22 +393,21 @@ def renderizar_aba_admin():
     with col1:
         usuario_selecionado = st.selectbox("Selecione o e-mail:", options=list(usuarios.keys()), key="select_reset_senha")
         
-        # Campo preenchido por padrão com 'Vonny123'
         senha_temp = st.text_input(
             "Senha Temporária:", 
-            value="vonny123", 
+            value="Vonny123", 
             type="password", 
             key="input_senha_temp"
         )
         
-        # Texto exibido logo abaixo do campo
-        st.caption("🔑 Senha padrão inicial: **vonny123**")
+        st.caption("🔑 Senha padrão inicial: **Vonny123**")
 
     with col2:
         st.write("##")
         if st.button("Definir Senha Temporária"):
-            if not senha_temp or len(senha_temp) < 6:
-                st.error("A senha deve ter pelo menos 6 caracteres.")
+            valida, msg_validacao = validar_complexidade_senha(senha_temp)
+            if not valida:
+                st.error(msg_validacao)
             else:
                 admin_atual = st.session_state["usuario_atual"]
                 novo_hash_temp = gerar_hash(senha_temp)
@@ -413,7 +422,6 @@ def renderizar_aba_admin():
                 dados_usr["senha"] = novo_hash_temp
                 dados_usr["forcar_redefinicao"] = True
 
-                # --- REGISTRO DE AUDITORIA DE RESET ---
                 registro_reset = {
                     "usuario_afetado": usuario_selecionado,
                     "resetado_por": admin_atual,
@@ -454,7 +462,6 @@ def renderizar_aba_admin():
 
     st.markdown("---")
 
-    # --- TABELAS DE AUDITORIA ---
     col_audit1, col_audit2 = st.columns(2)
 
     with col_audit1:
@@ -820,11 +827,12 @@ else:
 
             if btn_mudar_sb:
                 usuarios_dict, removidos_set, historico_remocoes, historico_resets = carregar_dados_db()
+                valida, msg_validacao = validar_complexidade_senha(nova_senha_sb)
                 
                 if gerar_hash(senha_antiga_sb) != usuarios_dict[usr_atual]["senha"]:
                     st.error("Senha atual incorreta.")
-                elif len(nova_senha_sb) < 6:
-                    st.error("Mínimo de 6 caracteres.")
+                elif not valida:
+                    st.error(msg_validacao)
                 elif nova_senha_sb != confirma_sb:
                     st.error("Senhas não conferem.")
                 else:
