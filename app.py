@@ -235,6 +235,12 @@ def formatar_qtd(val):
     else:
         return f"{val:,.0f} UN".replace(",", ".")
 
+def converter_df_para_excel(df_exportar):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_exportar.to_excel(writer, index=False, sheet_name='Inventario_Filtrado')
+    return output.getvalue()
+
 # --- GERENCIAMENTO DE SESSÃO ---
 if "logado" not in st.session_state:
     st.session_state["logado"] = False
@@ -557,6 +563,18 @@ def renderizar_dashboard():
 
         st.title("📊 Dashboard Executivo de Inventário")
         st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
+        
+        st.markdown("---")
+
+        excel_data = converter_df_para_excel(df_filtered)
+        st.download_button(
+            label="📥 Baixar Base Filtrada em Excel",
+            data=excel_data,
+            file_name="inventario_filtrado.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
+        )
+
         st.markdown("---")
 
         perda_total_rs = float(df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum())
