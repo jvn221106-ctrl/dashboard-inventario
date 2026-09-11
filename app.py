@@ -6,6 +6,7 @@ import os
 import hashlib
 import requests
 import io
+import datetime
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -81,6 +82,7 @@ EMAILS_PERMITIDOS_PADRAO = {
 
 OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Regional 1", "Regional 2", "Administrador"]
 
+# --- FUNÇÕES DE BANCO DE DADOS E AUTENTICAÇÃO ---
 def carregar_dados_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
@@ -88,12 +90,15 @@ def carregar_dados_db():
             if "usuarios" in data:
                 usuarios = data["usuarios"]
                 removidos = set(data.get("removidos", []))
+                historico_remocoes = data.get("historico_remocoes", [])
             else:
                 usuarios = data
                 removidos = set()
+                historico_remocoes = []
     else:
         usuarios = {}
         removidos = set()
+        historico_remocoes = []
 
     atualizou = False
     for email, (loja, perfil_padrao) in EMAILS_PERMITIDOS_PADRAO.items():
@@ -103,28 +108,54 @@ def carregar_dados_db():
                 "loja": loja,
                 "perfil": perfil_padrao,
                 "senha": None,
-                "forcar_redefinicao": False
+                "forcar_redefinicao": False,
+                "historico_senhas": []
             }
             atualizou = True
         elif email_limpo in usuarios:
             if "perfil" not in usuarios[email_limpo]:
                 usuarios[email_limpo]["perfil"] = perfil_padrao
                 atualizou = True
+            if "historico_senhas" not in usuarios[email_limpo]:
+                usuarios[email_limpo]["historico_senhas"] = []
+                atualizou = True
 
     if atualizou or not os.path.exists(DB_FILE):
-        salvar_dados_db(usuarios, removidos)
+        salvar_dados_db(usuarios, removidos, historico_remocoes)
 
-    return usuarios, removidos
+    return usuarios, removidos, historico_remocoes
 
-def salvar_dados_db(usuarios, removidos):
+def salvar_dados_db(usuarios, removidos, historico_remocoes=None):
+    if historico_remocoes is None:
+        historico_remocoes = []
     with open(DB_FILE, "w") as f:
         json.dump({
             "usuarios": usuarios,
-            "removidos": list(removidos)
+            "removidos": list(removidos),
+            "historico_remocoes": historico_remocoes
         }, f, indent=4)
 
 def gerar_hash(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
+
+def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removidos_set, historico_remocoes):
+    novo_hash = gerar_hash(nova_senha_texto)
+    dados_usr = usuarios_dict[email]
+    
+    historico = dados_usr.get("historico_senhas", [])
+    
+    if novo_hash == dados_usr.get("senha") or novo_hash in historico:
+        return False, "⚠️ Por motivos de segurança, você não pode reutilizar nenhuma das suas últimas 3 senhas."
+    
+    if dados_usr.get("senha"):
+        historico.insert(0, dados_usr["senha"])
+    
+    dados_usr["historico_senhas"] = historico[:3]
+    dados_usr["senha"] = novo_hash
+    dados_usr["forcar_redefinicao"] = False
+    
+    salvar_dados_db(usuarios_dict, removidos_set, historico_remocoes)
+    return True, "✅ Senha alterada com sucesso!"
 
 # --- LEITURA E TRATAMENTO DA PLANILHA NUVEM ---
 @st.cache_data(ttl=60)
@@ -203,7 +234,7 @@ def renderizar_tela_login():
     st.title("🔒 Vonny Cosméticos - Acesso ao Sistema")
     st.write("Digite seu e-mail corporativo para acessar os indicadores.")
 
-    usuarios, removidos = carregar_dados_db()
+    usuarios, removidos, historico_remocoes = carregar_dados_db()
 
     with st.form("form_login"):
         email_input = st.text_input("E-mail corporativo:").strip().lower()
@@ -225,13 +256,16 @@ def renderizar_tela_login():
             if not senha_input or len(senha_input) < 6:
                 st.warning("⚠️ **Primeiro Acesso:** Defina uma senha de no mínimo 6 caracteres e clique em entrar novamente.")
             else:
-                usuarios[email_input]["senha"] = gerar_hash(senha_input)
-                usuarios[email_input]["forcar_redefinicao"] = False
-                salvar_dados_db(usuarios, removidos)
-                st.session_state["logado"] = True
-                st.session_state["usuario_atual"] = email_input
-                st.success("🎉 Primeiro acesso realizado! Entrando...")
-                st.rerun()
+                sucesso, msg = atualizar_senha_com_historico(
+                    email_input, senha_input, usuarios, removidos, historico_remocoes
+                )
+                if sucesso:
+                    st.session_state["logado"] = True
+                    st.session_state["usuario_atual"] = email_input
+                    st.success("🎉 Primeiro acesso realizado! Entrando...")
+                    st.rerun()
+                else:
+                    st.error(msg)
         else:
             if gerar_hash(senha_input) == dados_usuario["senha"]:
                 st.session_state["logado"] = True
@@ -247,14 +281,14 @@ def renderizar_tela_login():
 
     st.markdown("---")
     with st.expander("❓ Esqueceu a senha?"):
-        st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinicao de senha.")
+        st.info("📩 Por favor, abra um chamado para o setor de **Controladoria / Prevenção de Perdas** solicitando a redefinição de senha.")
 
 # --- TELA OBRIGATÓRIA DE REDEFINIÇÃO DE SENHA ---
 def renderizar_tela_troca_obrigatoria():
     st.title("🔑 Redefinição de Senha Obrigatória")
     st.warning("Você acessou com uma **senha temporária**. Escolha uma nova senha definitiva para continuar.")
 
-    usuarios, removidos = carregar_dados_db()
+    usuarios, removidos, historico_remocoes = carregar_dados_db()
     email_logado = st.session_state["usuario_atual"]
 
     with st.form("form_troca_obrigatoria"):
@@ -271,18 +305,20 @@ def renderizar_tela_troca_obrigatoria():
             st.error("As senhas não coincidem.")
             return
 
-        usuarios[email_logado]["senha"] = gerar_hash(nova_senha)
-        usuarios[email_logado]["forcar_redefinicao"] = False
-        salvar_dados_db(usuarios, removidos)
-
-        st.session_state["troca_obrigatoria"] = False
-        st.success("✅ Senha atualizada com sucesso!")
-        st.rerun()
+        sucesso, msg = atualizar_senha_com_historico(
+            email_logado, nova_senha, usuarios, removidos, historico_remocoes
+        )
+        if sucesso:
+            st.session_state["troca_obrigatoria"] = False
+            st.success("✅ Senha atualizada com sucesso!")
+            st.rerun()
+        else:
+            st.error(msg)
 
 # --- ABA PAINEL ADMIN ---
 def renderizar_aba_admin():
     st.header("⚙️ Painel do Administrador")
-    usuarios, removidos = carregar_dados_db()
+    usuarios, removidos, historico_remocoes = carregar_dados_db()
 
     st.subheader("👥 Lista de Usuários e Status")
     dados_tabela = []
@@ -326,11 +362,12 @@ def renderizar_aba_admin():
                         "loja": nova_loja,
                         "perfil": novo_perfil,
                         "senha": None,
-                        "forcar_redefinicao": False
+                        "forcar_redefinicao": False,
+                        "historico_senhas": []
                     }
                     st.success(f"🎉 Usuário **{novo_email}** cadastrado!")
                 
-                salvar_dados_db(usuarios, removidos)
+                salvar_dados_db(usuarios, removidos, historico_remocoes)
                 st.rerun()
 
     st.markdown("---")
@@ -349,7 +386,7 @@ def renderizar_aba_admin():
             else:
                 usuarios[usuario_selecionado]["senha"] = gerar_hash(senha_temp)
                 usuarios[usuario_selecionado]["forcar_redefinicao"] = True
-                salvar_dados_db(usuarios, removidos)
+                salvar_dados_db(usuarios, removidos, historico_remocoes)
                 st.success(f"✅ Senha temporária definida para **{usuario_selecionado}**!")
 
     st.markdown("---")
@@ -361,19 +398,43 @@ def renderizar_aba_admin():
     with col_del2:
         st.write("##")
         if st.button("Remover Usuário", type="secondary"):
-            if user_para_deletar == st.session_state["usuario_atual"]:
+            admin_atual = st.session_state["usuario_atual"]
+            
+            if user_para_deletar == admin_atual:
                 st.error("Você não pode remover seu próprio usuário logado.")
             else:
+                registro_log = {
+                    "usuario_removido": user_para_deletar,
+                    "removido_por": admin_atual,
+                    "data_hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                }
+                historico_remocoes.append(registro_log)
+
                 del usuarios[user_para_deletar]
                 removidos.add(user_para_deletar)
-                salvar_dados_db(usuarios, removidos)
-                st.success(f"🗑️ Usuário **{user_para_deletar}** removido permanentemente!")
+
+                salvar_dados_db(usuarios, removidos, historico_remocoes)
+                st.success(f"🗑️ Usuário **{user_para_deletar}** removido por **{admin_atual}**!")
                 st.rerun()
+
+    st.markdown("---")
+
+    st.subheader("📋 Histórico de Remoções (Auditoria)")
+    if historico_remocoes:
+        df_historico = pd.DataFrame(historico_remocoes)
+        df_historico.rename(columns={
+            "usuario_removido": "Usuário Removido",
+            "removido_por": "Removido por (Admin)",
+            "data_hora": "Data e Horário"
+        }, inplace=True)
+        st.dataframe(df_historico, use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhuma remoção registrada até o momento.")
 
 # --- DASHBOARD VISUAL DE INVENTÁRIO ---
 def renderizar_dashboard():
     try:
-        usuarios, _ = carregar_dados_db()
+        usuarios, _, _ = carregar_dados_db()
         email_logado = st.session_state["usuario_atual"]
         dados_usr = usuarios.get(email_logado, {})
         
@@ -683,7 +744,7 @@ elif st.session_state["troca_obrigatoria"]:
     renderizar_tela_troca_obrigatoria()
 
 else:
-    usuarios_db, _ = carregar_dados_db()
+    usuarios_db, removidos_set, historico_remocoes = carregar_dados_db()
     usr_atual = st.session_state["usuario_atual"]
     dados_logado = usuarios_db.get(usr_atual, {})
 
@@ -697,7 +758,7 @@ else:
             btn_mudar_sb = st.form_submit_button("Atualizar Senha")
 
             if btn_mudar_sb:
-                usuarios_dict, removidos_set = carregar_dados_db()
+                usuarios_dict, removidos_set, historico_remocoes = carregar_dados_db()
                 
                 if gerar_hash(senha_antiga_sb) != usuarios_dict[usr_atual]["senha"]:
                     st.error("Senha atual incorreta.")
@@ -706,10 +767,13 @@ else:
                 elif nova_senha_sb != confirma_sb:
                     st.error("Senhas não conferem.")
                 else:
-                    usuarios_dict[usr_atual]["senha"] = gerar_hash(nova_senha_sb)
-                    usuarios_dict[usr_atual]["forcar_redefinicao"] = False
-                    salvar_dados_db(usuarios_dict, removidos_set)
-                    st.success("✅ Senha alterada com sucesso!")
+                    sucesso, msg = atualizar_senha_com_historico(
+                        usr_atual, nova_senha_sb, usuarios_dict, removidos_set, historico_remocoes
+                    )
+                    if sucesso:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
 
     if st.sidebar.button("🚪 Sair / Logout"):
         st.session_state["logado"] = False
