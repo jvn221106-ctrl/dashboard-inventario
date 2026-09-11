@@ -306,8 +306,6 @@ def renderizar_tela_troca_obrigatoria():
             st.error("As senhas não coincidem.")
             return
 
-        # Como o histórico já contem a senha antiga (salva na hora do reset pelo admin),
-        # esta chamada vai barrar a tentativa se o usuário digitar a senha que ele havia esquecido!
         sucesso, msg = atualizar_senha_com_historico(
             email_logado, nova_senha, usuarios, removidos, historico_remocoes
         )
@@ -375,7 +373,7 @@ def renderizar_aba_admin():
 
     st.markdown("---")
 
-st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
+    st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
     col1, col2 = st.columns([2, 1])
     with col1:
         usuario_selecionado = st.selectbox("Selecione o e-mail:", options=list(usuarios.keys()), key="select_reset_senha")
@@ -392,12 +390,10 @@ st.subheader("🔑 Resetar Senha / Gerar Senha Temporária")
                 historico = dados_usr.get("historico_senhas", [])
                 senha_atual_esquecida = dados_usr.get("senha")
 
-                # Salva a senha esquecida no histórico para o usuário não poder reutilizá-la depois
                 if senha_atual_esquecida and senha_atual_esquecida not in historico:
                     historico.insert(0, senha_atual_esquecida)
                     dados_usr["historico_senhas"] = historico[:3]
 
-                # Define a senha temporária e força a redefinição pelo usuário
                 dados_usr["senha"] = novo_hash_temp
                 dados_usr["forcar_redefinicao"] = True
                 salvar_dados_db(usuarios, removidos, historico_remocoes)
