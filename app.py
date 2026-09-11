@@ -386,13 +386,13 @@ def renderizar_aba_admin():
         # Campo preenchido por padrão com 'Vonny123'
         senha_temp = st.text_input(
             "Senha Temporária:", 
-            value="Vonny123", 
+            value="vonny123", 
             type="password", 
             key="input_senha_temp"
         )
         
         # Texto exibido logo abaixo do campo
-        st.caption("🔑 Senha padrão inicial: **Vonny123**")
+        st.caption("🔑 Senha padrão inicial: **vonny123**")
 
     with col2:
         st.write("##")
