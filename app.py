@@ -32,7 +32,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Exemplo de link direto formatado corretamente:
-URL_EXCEL_NUVEM = "https://vonnycosmeticos.sharepoint.com/:x:/s/ControladoriaPrevenodePerdas-CONTROLADORIA-PREVENODEPERDAS/IQBInqh02m9tQ77Yk4SJ0QDVAaDaWAL5Sn-84UhgG8zBmlQ?download=1"
+URL_EXCEL_NUVEM = "https://vonnycosmeticos.sharepoint.com/:x:/s/ControladoriaPrevenodePerdas-CONTROLADORIA-PREVENODEPERDAS/IQBInqh02m9tQ77Yk4SJ0QDVAY8DSBYODhqr-xEh6V4Dqhc?download=1"
 
 DB_FILE = "usuarios_db.json"
 
