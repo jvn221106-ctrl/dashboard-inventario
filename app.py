@@ -31,7 +31,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josue_pereira_vonnycosmeticos_onmicrosoft_com/IQAVAJHO0KlcS73eMCZZkJMEAdrs0fKrEhefibx1ieyMW_Y?e=B8QkcG&download=1"
+URL_EXCEL_NUVEM = "https://vonnycosmeticos.sharepoint.com/:x:/s/ControladoriaPrevenodePerdas-CONTROLADORIA-PREVENODEPERDAS/IQBInqh02m9tQ77Yk4SJ0QDVAaDaWAL5Sn-84UhgG8zBmlQ?e=F5rnvo&nav=MTVfe0ZDNEZGRTFELTAxMDUtNDk5Ni1CODQ1LTQ1RDc0NTk1N0IwRX0?e=B8QkcG&download=1"
 
 DB_FILE = "usuarios_db.json"
 
