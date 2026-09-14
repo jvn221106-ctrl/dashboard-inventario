@@ -177,7 +177,11 @@ def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removi
 # --- LEITURA E TRATAMENTO DA PLANILHA NUVEM ---
 @st.cache_data(ttl=60)
 def load_data():
-    response = requests.get(URL_EXCEL_NUVEM)
+    # Adicionado User-Agent para simular requisição de navegador e evitar bloqueios do SharePoint
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    response = requests.get(URL_EXCEL_NUVEM, headers=headers)
     response.raise_for_status()
     
     excel_file = io.BytesIO(response.content)
@@ -869,6 +873,8 @@ def renderizar_dashboard():
             )
             st.plotly_chart(fig_marca_rs, use_container_width=True)
 
+    except requests.exceptions.HTTPError as http_err:
+        st.error(f"⚠️ Erro HTTP ao baixar do SharePoint ({http_err.response.status_code}). Verifique se as permissões do link estão configuradas como 'Qualquer pessoa com o link'.")
     except Exception as e:
         st.error(f"Erro ao carregar os dados do arquivo Excel na nuvem: {e}")
 
