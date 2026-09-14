@@ -226,7 +226,7 @@
         },
         "vanusia.garcia@casadolojista.com.br": {
             "loja": "TODAS",
-            "perfil": "Administrador",
+            "perfil": "Controladoria",
             "senha": null,
             "forcar_redefinicao": false,
             "historico_senhas": []
@@ -235,6 +235,20 @@
             "loja": "B013,B015,B016,B017,B019,B020,B021,B022,B023,B024,B025,B026,B027,B028,B029,B031,B032",
             "perfil": "Regional 1",
             "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+         "anderson.rodrigues@vonnycosmeticos.com.br": {
+            "loja": "B013,B015,B016,B017,B019,B020,B021,B022,B023,B024,B025,B026,B027,B028,B029,B031,B032",
+            "perfil": "Gerente de produtos 1",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+         "diego.clodes@vonnycosmeticos.com.br": {
+            "loja":"B001,B002,B006,B007,B008,B009,B010,B011,B012,B018,B030",
+            "perfil": "Gerente de produtos 2",
+            "senha":null,
             "forcar_redefinicao": false,
             "historico_senhas": []
         }
