@@ -77,11 +77,13 @@ EMAILS_PERMITIDOS_PADRAO = {
     "sergio.oliveira@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
     "controladoriaprevencao@gmail.com": ("TODAS", "Administrador"),
     "josue.victor@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
-    "vanusia.garcia@casadolojista.com.br": ("TODAS", "Administrador"),
-    "luciana.valle@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Regional 1")
+    "vanusia.garcia@casadolojista.com.br": ("TODAS", "Controladoria"),
+    "luciana.valle@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Regional 1"),
+    "diego.clodes@vonnycosmeticos.com.br": (STR_REGIONAL_2, "Gerente de produtos 2"),
+    "anderson.rodrigues@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Gerente de produtos 1")
 }
 
-OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Regional 1", "Regional 2", "Administrador"]
+OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Regional 1", "Regional 2", "Administrador", "Gerente de produtos 1", "Gerente de produtos 2", "Controladoria"]
 
 # --- VALIDAÇÃO DE COMPLEXIDADE DE SENHA ---
 def validar_complexidade_senha(senha):
@@ -583,7 +585,7 @@ def renderizar_dashboard():
 
         regionais_disponiveis = [str(r) for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
 
-        if perfil_usuario == "Administrador":
+        if perfil_usuario == "Administrador","Controladoria":
             regionais_sel = st.sidebar.multiselect(
                 "Selecione a Divisão Regional:", 
                 options=regionais_disponiveis, 
@@ -597,7 +599,7 @@ def renderizar_dashboard():
         lojas_unicas = [str(x) for x in df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
         lojas_disponiveis = sorted(lojas_unicas)
 
-        if perfil_usuario == "Administrador":
+        if perfil_usuario == "Administrador","Controladoria":
             lojas_sel = st.sidebar.multiselect(
                 "Selecione os Centros:", 
                 options=lojas_disponiveis, 
@@ -633,16 +635,6 @@ def renderizar_dashboard():
         
         st.markdown("---")
 
-        excel_data = converter_df_para_excel(df_filtered)
-        st.download_button(
-            label="📥 Baixar Base Filtrada em Excel",
-            data=excel_data,
-            file_name="inventario_filtrado.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary"
-        )
-
-        st.markdown("---")
 
         perda_total_rs = float(df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum())
         perda_total_un = float(df_filtered[df_filtered['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum())
@@ -657,7 +649,7 @@ def renderizar_dashboard():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        if perfil_usuario == "Administrador":
+        if perfil_usuario == "Administrador","Controladoria":
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
 
             df_reg_comp = (
@@ -697,7 +689,7 @@ def renderizar_dashboard():
             st.plotly_chart(fig_reg_comp, use_container_width=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
-        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]: 
+        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2","Controladoria", "Gerente de produtos 1", "Gerente de produtos 2"]: 
             graf_col1, graf_col2 = st.columns(2)
 
             with graf_col1:
