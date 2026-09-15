@@ -233,6 +233,8 @@ def load_data():
     col_valor = achar_coluna(df, ['montante em mi', 'montante', 'mi'])
     col_loja = achar_coluna(df, ['centro'])
     col_marca = achar_coluna(df, ['fornecedor2', 'fornecedor', 'marca'])
+    col_material = achar_coluna(df, ['material', 'código', 'codigo'])
+    col_texto_mat = achar_coluna(df, ['texto breve material', 'descrição', 'descricao', 'texto breve'])
 
     if not col_qtd: col_qtd = df.columns[0]
     if not col_valor: col_valor = df.columns[1]
@@ -247,6 +249,9 @@ def load_data():
     
     df['Marca_Nome'] = df[col_marca].astype(str).fillna('').str.strip()
     df['Marca_Nome'] = df['Marca_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'Sem Marca')
+
+    df['Material_Codigo'] = df[col_material].astype(str).fillna('').str.strip() if col_material else 'S/ Codigo'
+    df['Material_Nome'] = df[col_texto_mat].astype(str).fillna('').str.strip() if col_texto_mat else 'S/ Descrição'
 
     df = df[(df['Loja_Nome'] != 'S/ Centro') & (df['Marca_Nome'] != 'Sem Marca')].copy()
 
@@ -683,6 +688,115 @@ def renderizar_dashboard():
         kpi2.metric("Perda Total (R$)", formatar_moeda(perda_total_rs))
         kpi3.metric("Sobras / Ajustes (+)", formatar_moeda(sobra_total_rs))
         kpi4.metric("Resultado Net (Caixa)", formatar_moeda(resultado_net))
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ==============================================================================
+        # ANÁLISE DE PRODUTOS QUE MAIS PERDEM (UNIFICADO & POR LOJA)
+        # ==============================================================================
+        st.subheader("🛍️ Análise de Produtos que Mais Perdem")
+        
+        tab_unificado, tab_por_loja = st.tabs(["🌐 Unificado (Geral)", "🏬 Por Loja (Centro)"])
+        
+        # Filtra apenas perdas negativas
+        df_perdas_prod = df_filtered[(df_filtered['Qtd_Limpa'] < 0) | (df_filtered['Valor_Limpo'] < 0)].copy()
+        
+        with tab_unificado:
+            col_unif_qtd, col_unif_val = st.columns(2)
+            
+            # --- UNIFICADO: TOP QUANTIDADE ---
+            with col_unif_qtd:
+                st.markdown("##### 📦 Mais Perdidos por Quantidade (UN)")
+                df_prod_qtd_unif = (
+                    df_perdas_prod[df_perdas_prod['Qtd_Limpa'] < 0]
+                    .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by='Qtd_Limpa', ascending=False)
+                )
+                df_prod_qtd_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_unif))])
+                df_top_qtd_unif = df_prod_qtd_unif.head(15).copy()
+                df_top_qtd_unif['Qtd_Limpa'] = df_top_qtd_unif['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                df_top_qtd_unif.rename(columns={
+                    'Material_Codigo': 'Material',
+                    'Material_Nome': 'Descrição do Produto',
+                    'Qtd_Limpa': 'Quantidade Perdida'
+                }, inplace=True)
+                st.dataframe(df_top_qtd_unif, use_container_width=True, hide_index=True)
+
+            # --- UNIFICADO: TOP VALOR ---
+            with col_unif_val:
+                st.markdown("##### 💰 Mais Perdidos por Valor (R$)")
+                df_prod_val_unif = (
+                    df_perdas_prod[df_perdas_prod['Valor_Limpo'] < 0]
+                    .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by='Valor_Limpo', ascending=False)
+                )
+                df_prod_val_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_unif))])
+                df_top_val_unif = df_prod_val_unif.head(15).copy()
+                df_top_val_unif['Valor_Limpo'] = df_top_val_unif['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
+                df_top_val_unif.rename(columns={
+                    'Material_Codigo': 'Material',
+                    'Material_Nome': 'Descrição do Produto',
+                    'Valor_Limpo': 'Valor Perdido'
+                }, inplace=True)
+                st.dataframe(df_top_val_unif, use_container_width=True, hide_index=True)
+
+        with tab_por_loja:
+            lojas_existentes = sorted([x for x in df_perdas_prod['Loja_Nome'].unique() if x])
+            if lojas_existentes:
+                centro_selecionado = st.selectbox("Selecione o Centro (Loja):", options=lojas_existentes)
+                df_loja_prod = df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]
+                
+                col_loja_qtd, col_loja_val = st.columns(2)
+                
+                # --- POR LOJA: TOP QUANTIDADE ---
+                with col_loja_qtd:
+                    st.markdown(f"##### 📦 Top Perdas por Qtd em `{centro_selecionado}`")
+                    df_prod_qtd_loja = (
+                        df_loja_prod[df_loja_prod['Qtd_Limpa'] < 0]
+                        .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
+                        .sum()
+                        .abs()
+                        .reset_index()
+                        .sort_values(by='Qtd_Limpa', ascending=False)
+                    )
+                    df_prod_qtd_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_loja))])
+                    df_top_qtd_loja = df_prod_qtd_loja.head(10).copy()
+                    df_top_qtd_loja['Qtd_Limpa'] = df_top_qtd_loja['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                    df_top_qtd_loja.rename(columns={
+                        'Material_Codigo': 'Material',
+                        'Material_Nome': 'Descrição do Produto',
+                        'Qtd_Limpa': 'Quantidade'
+                    }, inplace=True)
+                    st.dataframe(df_top_qtd_loja, use_container_width=True, hide_index=True)
+
+                # --- POR LOJA: TOP VALOR ---
+                with col_loja_val:
+                    st.markdown(f"##### 💰 Top Perdas por Valor em `{centro_selecionado}`")
+                    df_prod_val_loja = (
+                        df_loja_prod[df_loja_prod['Valor_Limpo'] < 0]
+                        .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
+                        .sum()
+                        .abs()
+                        .reset_index()
+                        .sort_values(by='Valor_Limpo', ascending=False)
+                    )
+                    df_prod_val_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_loja))])
+                    df_top_val_loja = df_prod_val_loja.head(10).copy()
+                    df_top_val_loja['Valor_Limpo'] = df_top_val_loja['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
+                    df_top_val_loja.rename(columns={
+                        'Material_Codigo': 'Material',
+                        'Material_Nome': 'Descrição do Produto',
+                        'Valor_Limpo': 'Valor'
+                    }, inplace=True)
+                    st.dataframe(df_top_val_loja, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum registro de perda encontrado para os filtros selecionados.")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
