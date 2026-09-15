@@ -599,7 +599,7 @@ def renderizar_dashboard():
         
         tab_unificado, tab_por_loja = st.tabs(["🌐 Unificado (Geral)", "🏬 Por Loja (Centro)"])
         
-        df_perdas_prod = df_filtered[(df_filtered['Qtd_Limpa'] < 0) | (df_filtered['Valor_Limpo'] < 0)].copy()
+        df_perdas_prod = df_filtered[(df_filtered['Qtd_Limpa'] ) | (df_filtered['Valor_Limpo'] )].copy()
         
         with tab_unificado:
             with st.expander("🔍 Filtro Local: Produtos Mais Perdidos (Unificado)"):
