@@ -248,7 +248,18 @@ def load_data():
     df['Marca_Nome'] = df[col_marca].astype(str).fillna('').str.strip()
     df['Marca_Nome'] = df['Marca_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'Sem Marca')
 
-    df['Material_Codigo'] = df[col_material].astype(str).fillna('').str.strip() if col_material else 'S/ Codigo'
+    # Trata a coluna Material_Codigo convertendo para numérico e removendo os decimais (.0)
+    if col_material:
+        df['Material_Codigo'] = (
+            pd.to_numeric(df[col_material], errors='coerce')
+            .fillna(0)
+            .astype(int)
+            .astype(str)
+            .str.replace('^0$', 'S/ Codigo', regex=True)
+        )
+    else:
+        df['Material_Codigo'] = 'S/ Codigo'
+
     df['Material_Nome'] = df[col_texto_mat].astype(str).fillna('').str.strip() if col_texto_mat else 'S/ Descrição'
 
     # Tratamento da Data de Lançamento -> Extrai Mês e Ano (MM/AAAA)
