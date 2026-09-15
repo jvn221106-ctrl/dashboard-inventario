@@ -196,13 +196,6 @@
             "forcar_redefinicao": false,
             "historico_senhas": []
         },
-        "jvn221106@gmail.com": {
-            "loja": "TODAS",
-            "perfil": "Administrador",
-            "senha": "41ef6aecf3e9f9ee920d39b5d9a816afe6e6c917f373b90b7f9e14b8324fcece",
-            "forcar_redefinicao": false,
-            "historico_senhas": []
-        },
         "sergio.oliveira@vonnycosmeticos.com.br": {
             "loja": "TODAS",
             "perfil": "Administrador",
@@ -238,17 +231,248 @@
             "forcar_redefinicao": false,
             "historico_senhas": []
         },
-         "anderson.rodrigues@vonnycosmeticos.com.br": {
+        "anderson.rodrigues@vonnycosmeticos.com.br": {
             "loja": "B013,B015,B016,B017,B019,B020,B021,B022,B023,B024,B025,B026,B027,B028,B029,B031,B032",
             "perfil": "Gerente de produtos 1",
             "senha": null,
             "forcar_redefinicao": false,
             "historico_senhas": []
         },
-         "diego.clodes@vonnycosmeticos.com.br": {
-            "loja":"B001,B002,B006,B007,B008,B009,B010,B011,B012,B018,B030",
+        "diego.clodes@vonnycosmeticos.com.br": {
+            "loja": "B001,B002,B006,B007,B008,B009,B010,B011,B012,B018,B030",
             "perfil": "Gerente de produtos 2",
-            "senha":null,
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "jose.marcello@vonnycosmeticos.com.br": {
+            "loja": "B001",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "trocas@vonnycosmeticos.com.br": {
+            "loja": "B001",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "veronica.bernardo@vonnycosmeticos.com.br": {
+            "loja": "B001",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "tatiane.tamizara@vonnycosmeticos.com.br": {
+            "loja": "B002",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "jessica.barros@vonnycosmeticos.com.br": {
+            "loja": "B006",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "elenilza.tavares@vonnycosmeticos.com.br": {
+            "loja": "B007",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "cibele.santos@vonnycosmeticos.com.br": {
+            "loja": "B008",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "cristiano.trindade@vonnycosmeticos.com.br": {
+            "loja": "B010",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "thais.amorim@vonnycosmeticos.com.br": {
+            "loja": "B011",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "jeane.lopes@vonnycosmeticos.com.br": {
+            "loja": "B012",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "juliana.lima@vonnycosmeticos.com.br": {
+            "loja": "B013",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "luciana.inacio@vonnycosmeticos.com.br": {
+            "loja": "B015",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "tabatta.silva@vonnycosmeticos.com.br": {
+            "loja": "B016",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "ianara.bossi@vonnycosmeticos.com.br": {
+            "loja": "B016",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "mariana.ribeiro@vonnycosmeticos.com.br": {
+            "loja": "B017",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "hector.ramon@vonnycosmeticos.com.br": {
+            "loja": "B018",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "angelica.santos@vonnycosmeticos.com.br": {
+            "loja": "B018",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "gisele.correa@vonnycosmeticos.com.br": {
+            "loja": "B018",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "barbara.oliveira@vonnycosmeticos.com.br": {
+            "loja": "B019",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "celena.monteiro@vonnycosmeticos.com.br": {
+            "loja": "B020",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "tamires.oliveira@vonnycosmeticos.com.br": {
+            "loja": "B021",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "debora.mazzilli@vonnycosmeticos.com.br": {
+            "loja": "B023",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "tays.silva@vonnycosmeticos.com.br": {
+            "loja": "B024",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "priscila.portela@vonnycosmeticos.com.br": {
+            "loja": "B025",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "mirela.santos@vonnycosmeticos.com.br": {
+            "loja": "B026",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "acacia.lima@vonnycosmeticos.com.br": {
+            "loja": "B027",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "marilane.oliveira@vonnycosmeticos.com.br": {
+            "loja": "B027",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "pablo.campelo@vonnycosmeticos.com.br": {
+            "loja": "B028",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "elayne.coutinho@vonnycosmeticos.com.br": {
+            "loja": "B029",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "tassiana.gomes@vonnycosmeticos.com.br": {
+            "loja": "B030",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "giovanna.flor@vonnycosmeticos.com.br": {
+            "loja": "B030",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "kelly.santos@vonnycosmeticos.com.br": {
+            "loja": "B030",
+            "perfil": "Líder de Loja",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "magnum.torres@vonnycosmeticos.com.br": {
+            "loja": "B031",
+            "perfil": "Líder de Loja",
+            "senha": null,
             "forcar_redefinicao": false,
             "historico_senhas": []
         }

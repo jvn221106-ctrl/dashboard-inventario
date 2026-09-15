@@ -74,14 +74,48 @@ EMAILS_PERMITIDOS_PADRAO = {
     "elza.silva@vonnycosmeticos.com.br": ("B029", "Gerente"),
     "joao.pereira@vonnycosmeticos.com.br": ("B030", "Gerente"),
     "jorgiane.aragao@vonnycosmeticos.com.br": ("B031", "Gerente"),
-    "jvn221106@gmail.com": ("TODAS", "Administrador"),
     "sergio.oliveira@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
     "controladoriaprevencao@gmail.com": ("TODAS", "Administrador"),
     "josue.victor@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
     "vanusia.garcia@casadolojista.com.br": ("TODAS", "Controladoria"),
     "luciana.valle@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Regional 1"),
     "diego.clodes@vonnycosmeticos.com.br": (STR_REGIONAL_2, "Gerente de produtos 2"),
-    "anderson.rodrigues@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Gerente de produtos 1")
+    "anderson.rodrigues@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Gerente de produtos 1"),
+    
+# NOVOS USUÁRIOS - LÍDER DE LOJA COM CENTROS CORRIGIDOS
+    "jose.marcello@vonnycosmeticos.com.br": ("B001", "Líder de Loja"),
+    "trocas@vonnycosmeticos.com.br": ("B001", "Líder de Loja"),
+    "veronica.bernardo@vonnycosmeticos.com.br": ("B001", "Líder de Loja"),
+    "tatiane.tamizara@vonnycosmeticos.com.br": ("B002", "Líder de Loja"),
+    "jessica.barros@vonnycosmeticos.com.br": ("B006", "Líder de Loja"),
+    "elenilza.tavares@vonnycosmeticos.com.br": ("B007", "Líder de Loja"),
+    "cibele.santos@vonnycosmeticos.com.br": ("B008", "Líder de Loja"),
+    "cristiano.trindade@vonnycosmeticos.com.br": ("B010", "Líder de Loja"),
+    "thais.amorim@vonnycosmeticos.com.br": ("B011", "Líder de Loja"),
+    "jeane.lopes@vonnycosmeticos.com.br": ("B012", "Líder de Loja"),
+    "juliana.lima@vonnycosmeticos.com.br": ("B013", "Líder de Loja"),
+    "luciana.inacio@vonnycosmeticos.com.br": ("B015", "Líder de Loja"),
+    "tabatta.silva@vonnycosmeticos.com.br": ("B016", "Líder de Loja"),
+    "ianara.bossi@vonnycosmeticos.com.br": ("B016", "Líder de Loja"),
+    "mariana.ribeiro@vonnycosmeticos.com.br": ("B017", "Líder de Loja"),
+    "hector.ramon@vonnycosmeticos.com.br": ("B018", "Líder de Loja"),
+    "angelica.santos@vonnycosmeticos.com.br": ("B018", "Líder de Loja"),
+    "gisele.correa@vonnycosmeticos.com.br": ("B018", "Líder de Loja"),
+    "barbara.oliveira@vonnycosmeticos.com.br": ("B019", "Líder de Loja"),
+    "celena.monteiro@vonnycosmeticos.com.br": ("B020", "Líder de Loja"),
+    "tamires.oliveira@vonnycosmeticos.com.br": ("B021", "Líder de Loja"),
+    "debora.mazzilli@vonnycosmeticos.com.br": ("B023", "Líder de Loja"),
+    "tays.silva@vonnycosmeticos.com.br": ("B024", "Líder de Loja"),
+    "priscila.portela@vonnycosmeticos.com.br": ("B025", "Líder de Loja"),
+    "mirela.santos@vonnycosmeticos.com.br": ("B026", "Líder de Loja"),
+    "acacia.lima@vonnycosmeticos.com.br": ("B027", "Líder de Loja"),
+    "marilane.oliveira@vonnycosmeticos.com.br": ("B027", "Líder de Loja"),
+    "pablo.campelo@vonnycosmeticos.com.br": ("B028", "Líder de Loja"),
+    "elayne.coutinho@vonnycosmeticos.com.br": ("B029", "Líder de Loja"),
+    "tassiana.gomes@vonnycosmeticos.com.br": ("B030", "Líder de Loja"),
+    "giovanna.flor@vonnycosmeticos.com.br": ("B030", "Líder de Loja"),
+    "kelly.santos@vonnycosmeticos.com.br": ("B030", "Líder de Loja"),
+    "magnum.torres@vonnycosmeticos.com.br": ("B031", "Líder de Loja")
 }
 
 OPCOES_PERFIL = ["Gerente", "Líder de Loja", "Regional 1", "Regional 2", "Administrador", "Gerente de produtos 1", "Gerente de produtos 2", "Controladoria"]
@@ -177,7 +211,6 @@ def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removi
 # --- LEITURA E TRATAMENTO DA PLANILHA NUVEM ---
 @st.cache_data(ttl=60)
 def load_data():
-    # Adicionado User-Agent para simular requisição de navegador e evitar bloqueios do SharePoint
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
@@ -849,7 +882,7 @@ def renderizar_dashboard():
                 .sum()
                 .abs()
                 .reset_index()
-                .sort_values(by='Valor_Limpo', ascending=False)
+                .sort_values(by='Marca_Nome', ascending=False)
             )
             df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-{x:,.0f}")
 
