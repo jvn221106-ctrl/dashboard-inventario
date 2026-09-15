@@ -31,7 +31,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Exemplo de link direto formatado corretamente:
 URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josue_pereira_vonnycosmeticos_onmicrosoft_com/IQAa9fAEHp_4Q4F6gohJuyruAbLuMnD6FPmVIyyZ0n4EJyc?download=1"
 
 DB_FILE = "usuarios_db.json"
@@ -82,7 +81,6 @@ EMAILS_PERMITIDOS_PADRAO = {
     "diego.clodes@vonnycosmeticos.com.br": (STR_REGIONAL_2, "Gerente de produtos 2"),
     "anderson.rodrigues@vonnycosmeticos.com.br": (STR_REGIONAL_1, "Gerente de produtos 1"),
     
-    # NOVOS USUÁRIOS - LÍDER DE LOJA
     "jose.marcello@vonnycosmeticos.com.br": ("B001", "Líder de Loja"),
     "trocas@vonnycosmeticos.com.br": ("B001", "Líder de Loja"),
     "veronica.bernardo@vonnycosmeticos.com.br": ("B001", "Líder de Loja"),
@@ -192,7 +190,6 @@ def gerar_hash(senha):
 def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removidos_set, historico_remocoes, historico_resets):
     novo_hash = gerar_hash(nova_senha_texto)
     dados_usr = usuarios_dict[email]
-    
     historico = dados_usr.get("historico_senhas", [])
     
     if novo_hash == dados_usr.get("senha") or novo_hash in historico:
@@ -235,6 +232,7 @@ def load_data():
     col_marca = achar_coluna(df, ['fornecedor2', 'fornecedor', 'marca'])
     col_material = achar_coluna(df, ['material', 'código', 'codigo'])
     col_texto_mat = achar_coluna(df, ['texto breve material', 'descrição', 'descricao', 'texto breve'])
+    col_data = achar_coluna(df, ['data de lançamento', 'lançamento', 'data'])
 
     if not col_qtd: col_qtd = df.columns[0]
     if not col_valor: col_valor = df.columns[1]
@@ -250,8 +248,26 @@ def load_data():
     df['Marca_Nome'] = df[col_marca].astype(str).fillna('').str.strip()
     df['Marca_Nome'] = df['Marca_Nome'].replace(['nan', 'None', 'NaN', 'none', ''], 'Sem Marca')
 
-    df['Material_Codigo'] = df[col_material].astype(str).fillna('').str.strip() if col_material else 'S/ Codigo'
+    # Trata a coluna Material_Codigo convertendo para numérico e removendo os decimais (.0)
+    if col_material:
+        df['Material_Codigo'] = (
+            pd.to_numeric(df[col_material], errors='coerce')
+            .fillna(0)
+            .astype(int)
+            .astype(str)
+            .str.replace('^0$', 'S/ Codigo', regex=True)
+        )
+    else:
+        df['Material_Codigo'] = 'S/ Codigo'
+
     df['Material_Nome'] = df[col_texto_mat].astype(str).fillna('').str.strip() if col_texto_mat else 'S/ Descrição'
+
+    # Tratamento da Data de Lançamento -> Extrai Mês e Ano (MM/AAAA)
+    if col_data:
+        df['Data_dt'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
+        df['Mes_Ano'] = df['Data_dt'].dt.strftime('%m/%Y').fillna('Sem Data')
+    else:
+        df['Mes_Ano'] = 'Sem Data'
 
     df = df[(df['Loja_Nome'] != 'S/ Centro') & (df['Marca_Nome'] != 'Sem Marca')].copy()
 
@@ -498,6 +514,95 @@ def renderizar_aba_admin():
                 st.success(f"🗑️ Usuário **{user_para_deletar}** removido por **{admin_atual}**!")
                 st.rerun()
 
+    st.markdown("---")
+
+    # --- SEÇÃO DE IMPORTAÇÃO E EXPORTAÇÃO APENAS DOS LOGS DE AUDITORIA EM EXCEL ---
+    st.subheader("📦 Backup e Restauração dos Históricos (Audit Logs)")
+    
+    col_exp, col_imp = st.columns(2)
+
+    with col_exp:
+        df_exp_resets = pd.DataFrame(historico_resets) if historico_resets else pd.DataFrame(columns=["usuario_afetado", "resetado_por", "data_hora"])
+        df_exp_remocoes = pd.DataFrame(historico_remocoes) if historico_remocoes else pd.DataFrame(columns=["usuario_removido", "removido_por", "data_hora"])
+
+        output_audit = io.BytesIO()
+        with pd.ExcelWriter(output_audit, engine='openpyxl') as writer:
+            df_exp_resets.to_excel(writer, index=False, sheet_name='Historico_Resets')
+            df_exp_remocoes.to_excel(writer, index=False, sheet_name='Historico_Remocoes')
+        
+        excel_audit_bytes = output_audit.getvalue()
+
+        st.download_button(
+            label="📥 Exportar Históricos (Excel)",
+            data=excel_audit_bytes,
+            file_name=f"historico_auditoria_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="secondary"
+        )
+
+    with col_imp:
+        uploaded_file = st.file_uploader("Importar Arquivo de Históricos (Excel)", type=["xlsx", "xls"], key="upload_audit_logs")
+        if uploaded_file is not None:
+            try:
+                xls_import = pd.ExcelFile(uploaded_file)
+                
+                novos_resets = 0
+                if "Historico_Resets" in xls_import.sheet_names:
+                    df_imp_resets = pd.read_excel(xls_import, sheet_name="Historico_Resets").fillna("")
+                    resets_importados = df_imp_resets.to_dict(orient="records")
+                    for item in resets_importados:
+                        if item.get("usuario_afetado") and item not in historico_resets:
+                            historico_resets.append(item)
+                            novos_resets += 1
+
+                novas_remocoes = 0
+                if "Historico_Remocoes" in xls_import.sheet_names:
+                    df_imp_remocoes = pd.read_excel(xls_import, sheet_name="Historico_Remocoes").fillna("")
+                    remocoes_importadas = df_imp_remocoes.to_dict(orient="records")
+                    for item in remocoes_importadas:
+                        if item.get("usuario_removido") and item not in historico_remocoes:
+                            historico_remocoes.append(item)
+                            novas_remocoes += 1
+
+                if novos_resets > 0 or novas_remocoes > 0:
+                    salvar_dados_db(usuarios, removidos, historico_remocoes, historico_resets)
+                    st.success(f"✅ Históricos importados com sucesso! ({novos_resets} resets e {novas_remocoes} remoções adicionados)")
+                    st.rerun()
+                else:
+                    st.info("ℹ️ Os históricos importados já existem na base atual ou a planilha está vazia.")
+            except Exception as e:
+                st.error(f"Erro ao processar o arquivo de importação: {e}")
+
+    st.markdown("---")
+
+    col_audit1, col_audit2 = st.columns(2)
+
+    with col_audit1:
+        st.subheader("🔑 Histórico de Resets de Senha")
+        if historico_resets:
+            df_resets = pd.DataFrame(historico_resets)
+            df_resets.rename(columns={
+                "usuario_afetado": "Usuário Afetado",
+                "resetado_por": "Resetado por (Admin)",
+                "data_hora": "Data e Horário"
+            }, inplace=True)
+            st.dataframe(df_resets, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum reset de senha registrado até o momento.")
+
+    with col_audit2:
+        st.subheader("📋 Histórico de Remoções")
+        if historico_remocoes:
+            df_historico = pd.DataFrame(historico_remocoes)
+            df_historico.rename(columns={
+                "usuario_removido": "Usuário Removido",
+                "removido_por": "Removido por (Admin)",
+                "data_hora": "Data e Horário"
+            }, inplace=True)
+            st.dataframe(df_historico, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhuma remoção registrada até o momento.")
+
 # --- DASHBOARD VISUAL DE INVENTÁRIO ---
 def renderizar_dashboard():
     try:
@@ -515,6 +620,10 @@ def renderizar_dashboard():
         if st.sidebar.button("🔄 Atualizar Dados"):
             st.cache_data.clear()
             st.rerun()
+
+        # Filtro de Mês / Ano (Geral)
+        meses_unicos = sorted([x for x in df['Mes_Ano'].unique() if x != 'Sem Data'])
+        meses_sel = st.sidebar.multiselect("Mês/Ano (Geral):", options=meses_unicos, default=meses_unicos)
 
         regionais_disponiveis = [str(r) for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
 
@@ -559,6 +668,7 @@ def renderizar_dashboard():
 
         # Base Global Filtrada
         df_filtered = df[
+            (df['Mes_Ano'].isin(meses_sel)) &
             (df['Regional_Nome'].isin(regionais_sel)) &
             (df['Loja_Nome'].isin(lojas_sel)) &
             (df['Marca_Nome'].isin(marcas_sel))
@@ -593,9 +703,16 @@ def renderizar_dashboard():
         
         with tab_unificado:
             with st.expander("🔍 Filtro Local: Produtos Mais Perdidos (Unificado)"):
-                m_unif_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_perdas_prod['Marca_Nome'].unique()), default=sorted(df_perdas_prod['Marca_Nome'].unique()), key="f_prod_unif_marca")
-            
-            df_perdas_unif_f = df_perdas_prod[df_perdas_prod['Marca_Nome'].isin(m_unif_sel)]
+                col_fu1, col_fu2 = st.columns(2)
+                with col_fu1:
+                    m_unif_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_perdas_prod['Marca_Nome'].unique()), default=sorted(df_perdas_prod['Marca_Nome'].unique()), key="f_prod_unif_marca")
+                with col_fu2:
+                    mes_unif_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_perdas_prod['Mes_Ano'].unique()), default=sorted(df_perdas_prod['Mes_Ano'].unique()), key="f_prod_unif_mes")
+
+            df_perdas_unif_f = df_perdas_prod[
+                (df_perdas_prod['Marca_Nome'].isin(m_unif_sel)) &
+                (df_perdas_prod['Mes_Ano'].isin(mes_unif_sel))
+            ]
 
             col_unif_qtd, col_unif_val = st.columns(2)
             
@@ -636,11 +753,20 @@ def renderizar_dashboard():
             if lojas_existentes:
                 centro_selecionado = st.selectbox("Selecione o Centro (Loja):", options=lojas_existentes, key="f_prod_loja_centro")
                 
-                with st.expander("🔍 Filtro Local: Marcas da Loja Selecionada"):
-                    marcas_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Marca_Nome'].unique())
-                    m_loja_sel = st.multiselect("Filtrar Marcas:", options=marcas_loja_opts, default=marcas_loja_opts, key="f_prod_loja_marca")
+                with st.expander("🔍 Filtro Local: Marcas e Meses da Loja Selecionada"):
+                    col_fl1, col_fl2 = st.columns(2)
+                    with col_fl1:
+                        marcas_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Marca_Nome'].unique())
+                        m_loja_sel = st.multiselect("Filtrar Marcas:", options=marcas_loja_opts, default=marcas_loja_opts, key="f_prod_loja_marca")
+                    with col_fl2:
+                        meses_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Mes_Ano'].unique())
+                        mes_loja_sel = st.multiselect("Filtrar Mês/Ano:", options=meses_loja_opts, default=meses_loja_opts, key="f_prod_loja_mes")
 
-                df_loja_prod = df_perdas_prod[(df_perdas_prod['Loja_Nome'] == centro_selecionado) & (df_perdas_prod['Marca_Nome'].isin(m_loja_sel))]
+                df_loja_prod = df_perdas_prod[
+                    (df_perdas_prod['Loja_Nome'] == centro_selecionado) &
+                    (df_perdas_prod['Marca_Nome'].isin(m_loja_sel)) &
+                    (df_perdas_prod['Mes_Ano'].isin(mes_loja_sel))
+                ]
                 
                 col_loja_qtd, col_loja_val = st.columns(2)
                 
@@ -687,9 +813,16 @@ def renderizar_dashboard():
             st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
             
             with st.expander("🔍 Filtro Local: Comparativo Regional"):
-                m_reg_sel = st.multiselect("Filtrar Marcas do Gráfico:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_reg_marcas")
+                col_fr1, col_fr2 = st.columns(2)
+                with col_fr1:
+                    m_reg_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_reg_marcas")
+                with col_fr2:
+                    mes_reg_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_reg_mes")
             
-            df_reg_filtered = df_filtered[df_filtered['Marca_Nome'].isin(m_reg_sel)]
+            df_reg_filtered = df_filtered[
+                (df_filtered['Marca_Nome'].isin(m_reg_sel)) &
+                (df_filtered['Mes_Ano'].isin(mes_reg_sel))
+            ]
 
             df_reg_comp = (
                 df_reg_filtered[df_reg_filtered['Valor_Limpo'] < 0]
@@ -722,15 +855,18 @@ def renderizar_dashboard():
             st.subheader("🏬 Análise e Ranking por Centro")
 
             with st.expander("🔍 Filtro Local: Perdas por Centro"):
-                col_fc1, col_fc2 = st.columns(2)
+                col_fc1, col_fc2, col_fc3 = st.columns(3)
                 with col_fc1:
                     c_lojas_sel = st.multiselect("Filtrar Centros Específicos:", options=sorted(df_filtered['Loja_Nome'].unique()), default=sorted(df_filtered['Loja_Nome'].unique()), key="f_centro_lojas")
                 with col_fc2:
                     c_marcas_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_centro_marcas")
+                with col_fc3:
+                    c_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_centro_meses")
 
             df_centros_local = df_filtered[
                 (df_filtered['Loja_Nome'].isin(c_lojas_sel)) &
-                (df_filtered['Marca_Nome'].isin(c_marcas_sel))
+                (df_filtered['Marca_Nome'].isin(c_marcas_sel)) &
+                (df_filtered['Mes_Ano'].isin(c_meses_sel))
             ]
 
             graf_col1, graf_col2 = st.columns(2)
@@ -812,15 +948,18 @@ def renderizar_dashboard():
         st.subheader("🏷️ Análise e Ranking por Marca")
 
         with st.expander("🔍 Filtro Local: Perdas por Marca"):
-            col_fm1, col_fm2 = st.columns(2)
+            col_fm1, col_fm2, col_fm3 = st.columns(3)
             with col_fm1:
                 m_marcas_sel = st.multiselect("Filtrar Marcas Específicas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_marca_marcas")
             with col_fm2:
                 m_centros_sel = st.multiselect("Filtrar Centros/Lojas:", options=sorted(df_filtered['Loja_Nome'].unique()), default=sorted(df_filtered['Loja_Nome'].unique()), key="f_marca_centros")
+            with col_fm3:
+                m_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_marca_meses")
 
         df_marcas_local = df_filtered[
             (df_filtered['Marca_Nome'].isin(m_marcas_sel)) &
-            (df_filtered['Loja_Nome'].isin(m_centros_sel))
+            (df_filtered['Loja_Nome'].isin(m_centros_sel)) &
+            (df_filtered['Mes_Ano'].isin(m_meses_sel))
         ]
 
         st.markdown("##### ⚠️ Ranking: Top 10 Marcas com Maior Perda")
@@ -852,7 +991,7 @@ def renderizar_dashboard():
         df_perdas_marcas = df_marcas_local[(df_marcas_local['Valor_Limpo'] < 0) | (df_marcas_local['Qtd_Limpa'] < 0)]
 
         with marca_col1:
-            st.markdown("##### 📦 Perdas por Marca - Linha do Tempo / Tendência (Qtd)")
+            st.markdown("##### 📦 Perdas por Marca - Tendência (Qtd)")
             df_marca_qtd = (
                 df_perdas_marcas[df_perdas_marcas['Qtd_Limpa'] < 0]
                 .groupby('Marca_Nome')['Qtd_Limpa']
@@ -877,7 +1016,7 @@ def renderizar_dashboard():
             st.plotly_chart(fig_marca_qtd, use_container_width=True)
 
         with marca_col2:
-            st.markdown("##### 🏷️ Perdas por Marca - Linha do Tempo / Tendência (R$)")
+            st.markdown("##### 🏷️ Perdas por Marca - Tendência (R$)")
             df_marca_rs = (
                 df_perdas_marcas[df_perdas_marcas['Valor_Limpo'] < 0]
                 .groupby('Marca_Nome')['Valor_Limpo']
