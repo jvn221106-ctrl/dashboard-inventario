@@ -791,22 +791,25 @@ def renderizar_dashboard():
                 .reset_index()
                 .sort_values(by='Valor_Limpo', ascending=False)
             )
-            df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}")
 
-            fig_reg_comp = px.bar(
-                df_reg_comp,
-                x='Regional_Nome',
-                y='Valor_Limpo',
-                text='Texto_Valor',
-                color='Regional_Nome',
-                title="Comparativo por Divisão Regional",
-                color_discrete_map={'Regional 1': '#4ba3e3', 'Regional 2': '#ff7f0e'},
-                labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
-            )
-            fig_reg_comp.update_traces(textposition='inside')
-            fig_reg_comp.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
-            st.plotly_chart(fig_reg_comp, use_container_width=True)
-            st.markdown("<br>", unsafe_allow_html=True)
+            if not df_reg_comp.empty:
+                df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                total_reg_val = df_reg_comp['Valor_Limpo'].sum()
+
+                fig_reg_comp = px.bar(
+                    df_reg_comp,
+                    x='Regional_Nome',
+                    y='Valor_Limpo',
+                    text='Texto_Valor',
+                    color='Regional_Nome',
+                    title=f"Comparativo por Divisão Regional — Total: -R$ {total_reg_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+                    color_discrete_map={'Regional 1': '#4ba3e3', 'Regional 2': '#ff7f0e'},
+                    labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
+                )
+                fig_reg_comp.update_traces(textposition='inside')
+                fig_reg_comp.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
+                st.plotly_chart(fig_reg_comp, use_container_width=True)
+                st.markdown("<br>", unsafe_allow_html=True)
 
         # RANKING POR CENTRO
         if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Controladoria", "Gerente de produtos 1", "Gerente de produtos 2"]: 
@@ -843,19 +846,21 @@ def renderizar_dashboard():
                     .sum().abs().reset_index()
                     .sort_values(by='Qtd_Limpa', ascending=False)
                 )
-                df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                if not df_qtd_lojas.empty:
+                    df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                    total_centros_qtd = df_qtd_lojas['Qtd_Limpa'].sum()
 
-                fig_qtd_lojas = px.bar(
-                    df_qtd_lojas,
-                    x='Loja_Nome',
-                    y='Qtd_Limpa',
-                    text='Texto_Qtd',
-                    title="Perda por Centro (Qtd)",
-                    labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
-                )
-                fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
-                fig_qtd_lojas.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(fig_qtd_lojas, use_container_width=True)
+                    fig_qtd_lojas = px.bar(
+                        df_qtd_lojas,
+                        x='Loja_Nome',
+                        y='Qtd_Limpa',
+                        text='Texto_Qtd',
+                        title=f"Perda por Centro (Qtd) — Total: -{total_centros_qtd:,.0f} un".replace(",", "."),
+                        labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
+                    )
+                    fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
+                    fig_qtd_lojas.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                    st.plotly_chart(fig_qtd_lojas, use_container_width=True)
 
             with graf_col2:
                 df_lojas = (
@@ -864,19 +869,21 @@ def renderizar_dashboard():
                     .sum().abs().reset_index()
                     .sort_values(by='Valor_Limpo', ascending=False)
                 )
-                df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
+                if not df_lojas.empty:
+                    df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    total_centros_val = df_lojas['Valor_Limpo'].sum()
 
-                fig_lojas = px.bar(
-                    df_lojas,
-                    x='Loja_Nome',
-                    y='Valor_Limpo',
-                    text='Texto_Valor',
-                    title="Perda por Centro (R$)",
-                    labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
-                )
-                fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
-                fig_lojas.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(fig_lojas, use_container_width=True)
+                    fig_lojas = px.bar(
+                        df_lojas,
+                        x='Loja_Nome',
+                        y='Valor_Limpo',
+                        text='Texto_Valor',
+                        title=f"Perda por Centro (R$) — Total: -R$ {total_centros_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+                        labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
+                    )
+                    fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
+                    fig_lojas.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                    st.plotly_chart(fig_lojas, use_container_width=True)
 
             st.markdown(f"##### 🏢 Ranking: Top {top_n_centros} Centros com Maior Perda")
 
@@ -960,20 +967,22 @@ def renderizar_dashboard():
                 .sort_values(by='Qtd_Limpa', ascending=False)
                 .head(top_n_marcas)
             )
-            df_marca_qtd['Texto_Qtd'] = df_marca_qtd['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+            if not df_marca_qtd.empty:
+                df_marca_qtd['Texto_Qtd'] = df_marca_qtd['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                total_marcas_qtd = df_marca_qtd['Qtd_Limpa'].sum()
 
-            fig_marca_qtd = px.line(
-                df_marca_qtd,
-                x='Marca_Nome',
-                y='Qtd_Limpa',
-                text='Texto_Qtd',
-                markers=True,
-                title=f"Perdas por Marca (Top {top_n_marcas} - Qtd)",
-                labels={'Qtd_Limpa': 'Perda (Qtd)', 'Marca_Nome': 'Marca'}
-            )
-            fig_marca_qtd.update_traces(line_color='#ff7f0e', line_width=3, marker_size=7, textposition='top center')
-            fig_marca_qtd.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_tickangle=-45)
-            st.plotly_chart(fig_marca_qtd, use_container_width=True)
+                fig_marca_qtd = px.line(
+                    df_marca_qtd,
+                    x='Marca_Nome',
+                    y='Qtd_Limpa',
+                    text='Texto_Qtd',
+                    markers=True,
+                    title=f"Perdas por Marca (Top {top_n_marcas} - Qtd) — Total Top {top_n_marcas}: -{total_marcas_qtd:,.0f} un".replace(",", "."),
+                    labels={'Qtd_Limpa': 'Perda (Qtd)', 'Marca_Nome': 'Marca'}
+                )
+                fig_marca_qtd.update_traces(line_color='#ff7f0e', line_width=3, marker_size=7, textposition='top center')
+                fig_marca_qtd.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_tickangle=-45)
+                st.plotly_chart(fig_marca_qtd, use_container_width=True)
 
         with marca_col2:
             st.markdown(f"##### 🏷️ Top {top_n_marcas} Perdas por Marca - Tendência (R$)")
@@ -984,20 +993,22 @@ def renderizar_dashboard():
                 .sort_values(by='Valor_Limpo', ascending=False)
                 .head(top_n_marcas)
             )
-            df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-{x:,.0f}")
+            if not df_marca_rs.empty:
+                df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                total_marcas_val = df_marca_rs['Valor_Limpo'].sum()
 
-            fig_marca_rs = px.line(
-                df_marca_rs,
-                x='Marca_Nome',
-                y='Valor_Limpo',
-                text='Texto_RS',
-                markers=True,
-                title=f"Perdas por Marca (Top {top_n_marcas} - R$)",
-                labels={'Valor_Limpo': 'Perda (R$)', 'Marca_Nome': 'Marca'}
-            )
-            fig_marca_rs.update_traces(line_color='#4ba3e3', line_width=3, marker_size=7, textposition='top center')
-            fig_marca_rs.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_tickangle=-45)
-            st.plotly_chart(fig_marca_rs, use_container_width=True)
+                fig_marca_rs = px.line(
+                    df_marca_rs,
+                    x='Marca_Nome',
+                    y='Valor_Limpo',
+                    text='Texto_RS',
+                    markers=True,
+                    title=f"Perdas por Marca (Top {top_n_marcas} - R$) — Total Top {top_n_marcas}: -R$ {total_marcas_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+                    labels={'Valor_Limpo': 'Perda (R$)', 'Marca_Nome': 'Marca'}
+                )
+                fig_marca_rs.update_traces(line_color='#4ba3e3', line_width=3, marker_size=7, textposition='top center')
+                fig_marca_rs.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_tickangle=-45)
+                st.plotly_chart(fig_marca_rs, use_container_width=True)
 
     except requests.exceptions.HTTPError as http_err:
         st.error(f"⚠️ Erro HTTP ao baixar do SharePoint ({http_err.response.status_code}). Verifique as permissões do link.")
