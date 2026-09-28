@@ -663,28 +663,19 @@ def renderizar_dashboard():
 
         # ANÁLISE DE PRODUTOS
         st.subheader("🛍️ Análise de Produtos que Mais Perdem")
-        
-        # Filtro da Quantidade de Produtos a Exibir (Mínimo 10)
-        top_n_produtos = st.number_input(
-            "Visualizar Top N Produtos (mínimo 10):", 
-            min_value=10, 
-            max_value=1000, 
-            value=15, 
-            step=5,
-            key="top_n_produtos"
-        )
-
         tab_unificado, tab_por_loja = st.tabs(["🌐 Unificado (Geral)", "🏬 Por Loja (Centro)"])
         
         df_perdas_prod = df_filtered[(df_filtered['Qtd_Limpa'] < 0) | (df_filtered['Valor_Limpo'] < 0)].copy()
         
         with tab_unificado:
             with st.expander("🔍 Filtro Local: Produtos Mais Perdidos (Unificado)"):
-                col_fu1, col_fu2 = st.columns(2)
+                col_fu1, col_fu2, col_fu3 = st.columns(3)
                 with col_fu1:
                     m_unif_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_perdas_prod['Marca_Nome'].unique()), default=sorted(df_perdas_prod['Marca_Nome'].unique()), key="f_prod_unif_marca")
                 with col_fu2:
                     mes_unif_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_perdas_prod['Mes_Ano'].unique()), default=sorted(df_perdas_prod['Mes_Ano'].unique()), key="f_prod_unif_mes")
+                with col_fu3:
+                    top_n_unif = st.slider("Selecione o Top (Produtos Unificado):", min_value=10, max_value=100, value=15, step=5, key="top_prod_unif")
 
             df_perdas_unif_f = df_perdas_prod[
                 (df_perdas_prod['Marca_Nome'].isin(m_unif_sel)) &
@@ -694,7 +685,7 @@ def renderizar_dashboard():
             col_unif_qtd, col_unif_val = st.columns(2)
             
             with col_unif_qtd:
-                st.markdown(f"##### 📦 Top {top_n_produtos} maiores por Quantidade (UN)")
+                st.markdown(f"##### 📦 Top {top_n_unif} maiores por Quantidade (UN)")
                 df_prod_qtd_unif = (
                     df_perdas_unif_f[df_perdas_unif_f['Qtd_Limpa'] < 0]
                     .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
@@ -702,13 +693,13 @@ def renderizar_dashboard():
                     .sort_values(by='Qtd_Limpa', ascending=False)
                 )
                 df_prod_qtd_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_unif))])
-                df_top_qtd_unif = df_prod_qtd_unif.head(top_n_produtos).copy()
+                df_top_qtd_unif = df_prod_qtd_unif.head(top_n_unif).copy()
                 df_top_qtd_unif['Qtd_Limpa'] = df_top_qtd_unif['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
                 df_top_qtd_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade Perdida'}, inplace=True)
                 st.dataframe(df_top_qtd_unif, use_container_width=True, hide_index=True)
 
             with col_unif_val:
-                st.markdown(f"##### 💰 Top {top_n_produtos} maiores por Valor (R$)")
+                st.markdown(f"##### 💰 Top {top_n_unif} maiores por Valor (R$)")
                 df_prod_val_unif = (
                     df_perdas_unif_f[df_perdas_unif_f['Valor_Limpo'] < 0]
                     .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
@@ -716,7 +707,7 @@ def renderizar_dashboard():
                     .sort_values(by='Valor_Limpo', ascending=False)
                 )
                 df_prod_val_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_unif))])
-                df_top_val_unif = df_prod_val_unif.head(top_n_produtos).copy()
+                df_top_val_unif = df_prod_val_unif.head(top_n_unif).copy()
                 df_top_val_unif['Valor_Limpo'] = df_top_val_unif['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
                 df_top_val_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor Perdido'}, inplace=True)
                 st.dataframe(df_top_val_unif, use_container_width=True, hide_index=True)
@@ -726,14 +717,16 @@ def renderizar_dashboard():
             if lojas_existentes:
                 centro_selecionado = st.selectbox("Selecione o Centro (Loja):", options=lojas_existentes, key="f_prod_loja_centro")
                 
-                with st.expander("🔍 Filtro Local: Marcas e Meses da Loja Selecionada"):
-                    col_fl1, col_fl2 = st.columns(2)
+                with st.expander("🔍 Filtro Local: Marcas, Meses e Top N da Loja Selecionada"):
+                    col_fl1, col_fl2, col_fl3 = st.columns(3)
                     with col_fl1:
                         marcas_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Marca_Nome'].unique())
                         m_loja_sel = st.multiselect("Filtrar Marcas:", options=marcas_loja_opts, default=marcas_loja_opts, key="f_prod_loja_marca")
                     with col_fl2:
                         meses_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Mes_Ano'].unique())
                         mes_loja_sel = st.multiselect("Filtrar Mês/Ano:", options=meses_loja_opts, default=meses_loja_opts, key="f_prod_loja_mes")
+                    with col_fl3:
+                        top_n_loja = st.slider("Selecione o Top (Produtos por Loja):", min_value=10, max_value=100, value=10, step=5, key="top_prod_loja")
 
                 df_loja_prod = df_perdas_prod[
                     (df_perdas_prod['Loja_Nome'] == centro_selecionado) &
@@ -744,7 +737,7 @@ def renderizar_dashboard():
                 col_loja_qtd, col_loja_val = st.columns(2)
                 
                 with col_loja_qtd:
-                    st.markdown(f"##### 📦 Top {top_n_produtos} Perdas por Qtd em `{centro_selecionado}`")
+                    st.markdown(f"##### 📦 Top {top_n_loja} Perdas por Qtd em `{centro_selecionado}`")
                     df_prod_qtd_loja = (
                         df_loja_prod[df_loja_prod['Qtd_Limpa'] < 0]
                         .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
@@ -752,13 +745,13 @@ def renderizar_dashboard():
                         .sort_values(by='Qtd_Limpa', ascending=False)
                     )
                     df_prod_qtd_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_loja))])
-                    df_top_qtd_loja = df_prod_qtd_loja.head(top_n_produtos).copy()
+                    df_top_qtd_loja = df_prod_qtd_loja.head(top_n_loja).copy()
                     df_top_qtd_loja['Qtd_Limpa'] = df_top_qtd_loja['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
                     df_top_qtd_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade'}, inplace=True)
                     st.dataframe(df_top_qtd_loja, use_container_width=True, hide_index=True)
 
                 with col_loja_val:
-                    st.markdown(f"##### 💰 Top {top_n_produtos} Perdas por Valor em `{centro_selecionado}`")
+                    st.markdown(f"##### 💰 Top {top_n_loja} Perdas por Valor em `{centro_selecionado}`")
                     df_prod_val_loja = (
                         df_loja_prod[df_loja_prod['Valor_Limpo'] < 0]
                         .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
@@ -766,7 +759,7 @@ def renderizar_dashboard():
                         .sort_values(by='Valor_Limpo', ascending=False)
                     )
                     df_prod_val_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_loja))])
-                    df_top_val_loja = df_prod_val_loja.head(top_n_produtos).copy()
+                    df_top_val_loja = df_prod_val_loja.head(top_n_loja).copy()
                     df_top_val_loja['Valor_Limpo'] = df_top_val_loja['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
                     df_top_val_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor'}, inplace=True)
                     st.dataframe(df_top_val_loja, use_container_width=True, hide_index=True)
@@ -819,21 +812,15 @@ def renderizar_dashboard():
         if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Controladoria", "Gerente de produtos 1", "Gerente de produtos 2"]: 
             st.subheader("🏬 Análise e Ranking por Centro")
 
-            # Seleção restrita apenas para Administradores / Controladoria
-            if perfil_usuario in ["Administrador", "Controladoria"]:
-                top_n_centros = st.number_input(
-                    "Visualizar Top N Centros (mínimo 10 - Exclusivo Administrador):", 
-                    min_value=10, 
-                    max_value=200, 
-                    value=10, 
-                    step=5,
-                    key="top_n_centros"
-                )
-            else:
-                top_n_centros = 10
-
             with st.expander("🔍 Filtro Local: Perdas por Centro"):
-                col_fc1, col_fc2, col_fc3 = st.columns(3)
+                if perfil_usuario == "Administrador":
+                    col_fc1, col_fc2, col_fc3, col_fc4 = st.columns(4)
+                    with col_fc4:
+                        top_n_centros = st.slider("Selecione o Top (Centros):", min_value=10, max_value=100, value=10, step=5, key="top_centros_adm")
+                else:
+                    col_fc1, col_fc2, col_fc3 = st.columns(3)
+                    top_n_centros = 10
+
                 with col_fc1:
                     c_lojas_sel = st.multiselect("Filtrar Centros Específicos:", options=sorted(df_filtered['Loja_Nome'].unique()), default=sorted(df_filtered['Loja_Nome'].unique()), key="f_centro_lojas")
                 with col_fc2:
@@ -855,7 +842,6 @@ def renderizar_dashboard():
                     .groupby('Loja_Nome')['Qtd_Limpa']
                     .sum().abs().reset_index()
                     .sort_values(by='Qtd_Limpa', ascending=False)
-                    .head(top_n_centros)
                 )
                 df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
 
@@ -864,7 +850,7 @@ def renderizar_dashboard():
                     x='Loja_Nome',
                     y='Qtd_Limpa',
                     text='Texto_Qtd',
-                    title=f"Perda por Centro (Qtd) - Top {top_n_centros}",
+                    title="Perda por Centro (Qtd)",
                     labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
                 )
                 fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
@@ -877,7 +863,6 @@ def renderizar_dashboard():
                     .groupby('Loja_Nome')['Valor_Limpo']
                     .sum().abs().reset_index()
                     .sort_values(by='Valor_Limpo', ascending=False)
-                    .head(top_n_centros)
                 )
                 df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-{x:,.2f}")
 
@@ -886,7 +871,7 @@ def renderizar_dashboard():
                     x='Loja_Nome',
                     y='Valor_Limpo',
                     text='Texto_Valor',
-                    title=f"Perda por Centro (R$) - Top {top_n_centros}",
+                    title="Perda por Centro (R$)",
                     labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
                 )
                 fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
@@ -921,23 +906,16 @@ def renderizar_dashboard():
         # PERDAS POR MARCA
         st.subheader("🏷️ Análise e Ranking por Marca")
 
-        top_n_marcas = st.number_input(
-            "Visualizar Top N Marcas (mínimo 10):", 
-            min_value=10, 
-            max_value=500, 
-            value=10, 
-            step=5,
-            key="top_n_marcas"
-        )
-
         with st.expander("🔍 Filtro Local: Perdas por Marca"):
-            col_fm1, col_fm2, col_fm3 = st.columns(3)
+            col_fm1, col_fm2, col_fm3, col_fm4 = st.columns(4)
             with col_fm1:
                 m_marcas_sel = st.multiselect("Filtrar Marcas Específicas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_marca_marcas")
             with col_fm2:
                 m_centros_sel = st.multiselect("Filtrar Centros/Lojas:", options=sorted(df_filtered['Loja_Nome'].unique()), default=sorted(df_filtered['Loja_Nome'].unique()), key="f_marca_centros")
             with col_fm3:
                 m_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_marca_meses")
+            with col_fm4:
+                top_n_marcas = st.slider("Selecione o Top (Marcas):", min_value=10, max_value=100, value=10, step=5, key="top_marcas")
 
         df_marcas_local = df_filtered[
             (df_filtered['Marca_Nome'].isin(m_marcas_sel)) &
@@ -974,7 +952,7 @@ def renderizar_dashboard():
         df_perdas_marcas = df_marcas_local[(df_marcas_local['Valor_Limpo'] < 0) | (df_marcas_local['Qtd_Limpa'] < 0)]
 
         with marca_col1:
-            st.markdown(f"##### 📦 Perdas por Marca - Tendência Top {top_n_marcas} (Qtd)")
+            st.markdown(f"##### 📦 Top {top_n_marcas} Perdas por Marca - Tendência (Qtd)")
             df_marca_qtd = (
                 df_perdas_marcas[df_perdas_marcas['Qtd_Limpa'] < 0]
                 .groupby('Marca_Nome')['Qtd_Limpa']
@@ -990,7 +968,7 @@ def renderizar_dashboard():
                 y='Qtd_Limpa',
                 text='Texto_Qtd',
                 markers=True,
-                title=f"Perdas por Marca Top {top_n_marcas} (Qtd)",
+                title=f"Perdas por Marca (Top {top_n_marcas} - Qtd)",
                 labels={'Qtd_Limpa': 'Perda (Qtd)', 'Marca_Nome': 'Marca'}
             )
             fig_marca_qtd.update_traces(line_color='#ff7f0e', line_width=3, marker_size=7, textposition='top center')
@@ -998,7 +976,7 @@ def renderizar_dashboard():
             st.plotly_chart(fig_marca_qtd, use_container_width=True)
 
         with marca_col2:
-            st.markdown(f"##### 🏷️ Perdas por Marca - Tendência Top {top_n_marcas} (R$)")
+            st.markdown(f"##### 🏷️ Top {top_n_marcas} Perdas por Marca - Tendência (R$)")
             df_marca_rs = (
                 df_perdas_marcas[df_perdas_marcas['Valor_Limpo'] < 0]
                 .groupby('Marca_Nome')['Valor_Limpo']
@@ -1014,7 +992,7 @@ def renderizar_dashboard():
                 y='Valor_Limpo',
                 text='Texto_RS',
                 markers=True,
-                title=f"Perdas por Marca Top {top_n_marcas} (R$)",
+                title=f"Perdas por Marca (Top {top_n_marcas} - R$)",
                 labels={'Valor_Limpo': 'Perda (R$)', 'Marca_Nome': 'Marca'}
             )
             fig_marca_rs.update_traces(line_color='#4ba3e3', line_width=3, marker_size=7, textposition='top center')
