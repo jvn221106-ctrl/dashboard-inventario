@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- ESTILIZAÇÃO VISUAL (TEMA ESCURO) ---
+# --- ESTILIZAÇÃO VISUAL (TEMA ESCURO + BARRA DE ROLAGEM NOS MULTISELECTS) ---
 st.markdown("""
     <style>
     .stApp {
@@ -27,6 +27,28 @@ st.markdown("""
     div[data-testid="stMetricValue"] {
         font-size: 1.8rem !important;
         font-weight: bold;
+    }
+    
+    /* Permite rolagem horizontal e limita altura nos multiselects */
+    div[data-baseweb="select"] > div:first-child {
+        max-height: 80px !important;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        flex-wrap: nowrap !important;
+    }
+    
+    /* Estilização da barra de rolagem */
+    div[data-baseweb="select"] > div:first-child::-webkit-scrollbar {
+        height: 6px;
+        width: 6px;
+    }
+    div[data-baseweb="select"] > div:first-child::-webkit-scrollbar-thumb {
+        background: #4ba3e3;
+        border-radius: 4px;
+    }
+    div[data-baseweb="select"] > div:first-child::-webkit-scrollbar-track {
+        background: #1e222d;
     }
     </style>
 """, unsafe_allow_html=True)
