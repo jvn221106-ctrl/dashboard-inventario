@@ -791,7 +791,6 @@ def renderizar_dashboard():
                 .reset_index()
                 .sort_values(by='Valor_Limpo', ascending=False)
             )
-
             if not df_reg_comp.empty:
                 df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 total_reg_val = df_reg_comp['Valor_Limpo'].sum()
