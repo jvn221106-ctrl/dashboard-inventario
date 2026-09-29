@@ -463,8 +463,8 @@ def renderizar_aba_admin():
     col1, col2 = st.columns([2, 1])
     with col1:
         usuario_selecionado = st.selectbox("Selecione o e-mail:", options=list(usuarios.keys()), key="select_reset_senha")
-        senha_temp = st.text_input("Senha Temporária:", value="Vonny123", type="password", key="input_senha_temp")
-        st.caption("🔑 Senha padrão inicial: **Vonny123**")
+        senha_temp = st.text_input("Senha Temporária:", value="Controladoria", type="password", key="input_senha_temp")
+        st.caption("🔑 Senha padrão inicial: **Controladoria**")
 
     with col2:
         st.write("##")
