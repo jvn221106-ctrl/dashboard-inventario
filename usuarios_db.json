@@ -126,7 +126,7 @@
             "forcar_redefinicao": false,
             "historico_senhas": []
         },
-        "daiane.martins@vonnycosmeticos.com.br": {
+        "suzana.pires@vonnycosmeticos.com.br": {
             "loja": "B022",
             "perfil": "Gerente",
             "senha": null,
@@ -196,6 +196,13 @@
             "forcar_redefinicao": false,
             "historico_senhas": []
         },
+         "manuelle.ramos@vonnycosmeticos.com.br": {
+            "loja": "B032",
+            "perfil": "Gerente",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
         "sergio.oliveira@vonnycosmeticos.com.br": {
             "loja": "TODAS",
             "perfil": "Administrador",
@@ -211,6 +218,13 @@
             "historico_senhas": []
         },
         "josue.victor@vonnycosmeticos.com.br": {
+            "loja": "TODAS",
+            "perfil": "Administrador",
+            "senha": null,
+            "forcar_redefinicao": false,
+            "historico_senhas": []
+        },
+        "Jvn221106@gmail.com": {
             "loja": "TODAS",
             "perfil": "Administrador",
             "senha": null,

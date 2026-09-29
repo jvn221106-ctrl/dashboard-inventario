@@ -85,7 +85,7 @@ EMAILS_PERMITIDOS_PADRAO = {
     "suzana.silveira@vonnycosmeticos.com.br": ("B020", "Gerente"),
     "luciana.vasconcelos@vonnycosmeticos.com.br": ("B021", "Gerente"),
     "wagner.valle@casadolojista.com.br": (STR_REGIONAL_2, "Regional 2"),
-    "daiane.martins@vonnycosmeticos.com.br": ("B022", "Gerente"),
+    "suzana.pires@vonnycosmeticos.com.br": ("B022", "Gerente"),
     "gisele.trampusch@vonnycosmeticos.com.br": ("B023", "Gerente"),
     "raquel.lopes@vonnycosmeticos.com.br": ("B024", "Gerente"),
     "claudinea.santos@vonnycosmeticos.com.br": ("B025", "Gerente"),
@@ -95,6 +95,7 @@ EMAILS_PERMITIDOS_PADRAO = {
     "elza.silva@vonnycosmeticos.com.br": ("B029", "Gerente"),
     "joao.pereira@vonnycosmeticos.com.br": ("B030", "Gerente"),
     "jorgiane.aragao@vonnycosmeticos.com.br": ("B031", "Gerente"),
+    "manuelle.ramos@vonnycosmeticos.com.br": ("B032", "Gerente"),
     "sergio.oliveira@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
     "controladoriaprevencao@gmail.com": ("TODAS", "Administrador"),
     "josue.victor@vonnycosmeticos.com.br": ("TODAS", "Administrador"),
@@ -110,7 +111,6 @@ EMAILS_PERMITIDOS_PADRAO = {
     "jessica.barros@vonnycosmeticos.com.br": ("B006", "Líder de Loja"),
     "elenilza.tavares@vonnycosmeticos.com.br": ("B007", "Líder de Loja"),
     "cibele.santos@vonnycosmeticos.com.br": ("B008", "Líder de Loja"),
-    "cristiano.trindade@vonnycosmeticos.com.br": ("B010", "Líder de Loja"),
     "thais.amorim@vonnycosmeticos.com.br": ("B011", "Líder de Loja"),
     "jeane.lopes@vonnycosmeticos.com.br": ("B012", "Líder de Loja"),
     "juliana.lima@vonnycosmeticos.com.br": ("B013", "Líder de Loja"),
@@ -134,7 +134,7 @@ EMAILS_PERMITIDOS_PADRAO = {
     "elayne.coutinho@vonnycosmeticos.com.br": ("B029", "Líder de Loja"),
     "tassiana.gomes@vonnycosmeticos.com.br": ("B030", "Líder de Loja"),
     "giovanna.flor@vonnycosmeticos.com.br": ("B030", "Líder de Loja"),
-    "kelly.santos@vonnycosmeticos.com.br": ("B030", "Líder de Loja"),
+    "kelly.santos@vonnycosmeticos.com.br": ("B009", "Líder de Loja"),
     "magnum.torres@vonnycosmeticos.com.br": ("B031", "Líder de Loja")
 }
 
