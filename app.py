@@ -21,7 +21,7 @@ st.set_page_config(
 st.markdown("""
     <style>
     .stApp {
-        background-color: #800080;
+        background-color: #0e1117;
         color: #ffffff;
     }
     div[data-testid="stMetricValue"] {
@@ -48,7 +48,7 @@ st.markdown("""
         border-radius: 4px;
     }
     div[data-baseweb="select"] > div:first-child::-webkit-scrollbar-track {
-        background: #800080;
+        background: #1e222d;
     }
     </style>
 """, unsafe_allow_html=True)
