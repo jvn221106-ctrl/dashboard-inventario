@@ -48,7 +48,7 @@ st.markdown("""
         border-radius: 4px;
     }
     div[data-baseweb="select"] > div:first-child::-webkit-scrollbar-track {
-        background: #1e222d;
+        background: #800080;
     }
     </style>
 """, unsafe_allow_html=True)
