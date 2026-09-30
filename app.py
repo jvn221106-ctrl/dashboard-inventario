@@ -21,7 +21,7 @@ st.set_page_config(
 st.markdown("""
     <style>
     .stApp {
-        background-color: #0e1117;
+        background-color: #800080;
         color: #ffffff;
     }
     div[data-testid="stMetricValue"] {
