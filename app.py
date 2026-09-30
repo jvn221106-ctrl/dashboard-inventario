@@ -78,7 +78,6 @@ DADOS_LOJAS_INICIAIS = [
     "Gmail padrão Recebimento": "-",
     "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Sara",
     },
- 
     {
         "Nº LOJA": "B001",
         "REFERENCIA LOJA": "ARICANDUVA",
