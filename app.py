@@ -56,6 +56,83 @@ st.markdown("""
 URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josue_pereira_vonnycosmeticos_onmicrosoft_com/IQBPk7RDywHuR53pgILohLKbARZ0TkXuAjeJEfuUpfNehRM?download=1"
 
 DB_FILE = "usuarios_db.json"
+LOJAS_DB_FILE = "lojas_contatos_db.json"
+
+# ==============================================================================
+# DADOS INICIAIS DA TABELA DE LOJAS E CONTATOS
+# ==============================================================================
+DADOS_LOJAS_INICIAIS = [
+    {
+        "Nº LOJA": "B001", "REFERENCIA LOJA": "ARICANDUVA", "UF": "SP", "ESTADO": "SÃO PAULO",
+        "NOME": "Sara Roberta Ferreira Leite dos Santos", "EMAIL": "sara.leite@vonnycosmeticos.com.br",
+        "TELEFONE": "11 93264-7912", "SETOR": "LOJA", "CARGO": "105 - Gerente",
+        "N DO GRUPO": "1", "GRUPO": "GERENTES LOJA", "SAP ID": "KSOUZA", "Gmail padrão Recebimento": "6760",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Sara"
+    },
+    {
+        "Nº LOJA": "B001", "REFERENCIA LOJA": "ARICANDUVA", "UF": "SP", "ESTADO": "SÃO PAULO",
+        "NOME": "Jose Marcello Lobo Junior", "EMAIL": "jose.marcello@vonnycosmeticos.com.br",
+        "TELEFONE": "11 97353-0039", "SETOR": "COORDENADOR", "CARGO": "1045 - Líder de Setor",
+        "N DO GRUPO": "2", "GRUPO": "LÍDERES LOJA", "SAP ID": "JMARCELLO", "Gmail padrão Recebimento": "4863",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Sara"
+    },
+    {
+        "Nº LOJA": "B001", "REFERENCIA LOJA": "ARICANDUVA", "UF": "SP", "ESTADO": "SÃO PAULO",
+        "NOME": "Jaqueline Aparecida Santos Laurentino", "EMAIL": "-",
+        "TELEFONE": "11 95476-8160", "SETOR": "LOJA", "CARGO": "-",
+        "N DO GRUPO": "2", "GRUPO": "LÍDERES LOJA", "SAP ID": "-", "Gmail padrão Recebimento": "-",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Sara"
+    },
+    {
+        "Nº LOJA": "B001", "REFERENCIA LOJA": "ARICANDUVA", "UF": "SP", "ESTADO": "SÃO PAULO",
+        "NOME": "Valéria Francisco Avelino", "EMAIL": "adm.aricanduva@vonnycosmeticos.com.br",
+        "TELEFONE": "11 99634-8636", "SETOR": "ADMINISTRATIVO", "CARGO": "-",
+        "N DO GRUPO": "3", "GRUPO": "ADMINISTRATIVO", "SAP ID": "TROCAS14 e TROCAS15", "Gmail padrão Recebimento": "-",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Sara"
+    },
+    {
+        "Nº LOJA": "B001", "REFERENCIA LOJA": "ARICANDUVA", "UF": "SP", "ESTADO": "SÃO PAULO",
+        "NOME": "Esther Silva de Oliveira Pelizzari", "EMAIL": "trocas@vonnycosmeticos.com.br",
+        "TELEFONE": "11 97234-3202", "SETOR": "RECEBIMENTO / TROCAS", "CARGO": "-",
+        "N DO GRUPO": "2", "GRUPO": "LÍDERES LOJA", "SAP ID": "-", "Gmail padrão Recebimento": "-",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Sara"
+    },
+    {
+        "Nº LOJA": "B001", "REFERENCIA LOJA": "ARICANDUVA", "UF": "SP", "ESTADO": "SÃO PAULO",
+        "NOME": "Fabio Joao de Andrade", "EMAIL": "recebimento@vonnycosmeticos.com.br",
+        "TELEFONE": "11 97234-3202", "SETOR": "RECEBIMENTO", "CARGO": "1051 - Atendente de Loja (exp.) inicio em 01/09/2024",
+        "N DO GRUPO": "5", "GRUPO": "RECEBIMENTO", "SAP ID": "-", "Gmail padrão Recebimento": "recebmpb001@gmail.com",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Sara"
+    },
+    {
+        "Nº LOJA": "B001", "REFERENCIA LOJA": "ARICANDUVA", "UF": "SP", "ESTADO": "SÃO PAULO",
+        "NOME": "Veronica Bernardo de O Costa", "EMAIL": "veronica.bernardo@vonnycosmeticos.com.br",
+        "TELEFONE": "11 97234-3202", "SETOR": "LOJA", "CARGO": "1051 - Atendente de Loja",
+        "N DO GRUPO": "2", "GRUPO": "LÍDERES LOJA", "SAP ID": "VBERNARDO", "Gmail padrão Recebimento": "4956",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Sara"
+    },
+    {
+        "Nº LOJA": "B002", "REFERENCIA LOJA": "SÃO JOSÉ DOS CAMPOS", "UF": "SP", "ESTADO": "SÃO JOSÉ DOS CAMPOS",
+        "NOME": "Julio Fonseca", "EMAIL": "julio.fonseca@vonnycosmeticos.com.br",
+        "TELEFONE": "11 94487-4329", "SETOR": "LOJA", "CARGO": "105 - Gerente",
+        "N DO GRUPO": "1", "GRUPO": "GERENTES LOJA", "SAP ID": "-", "Gmail padrão Recebimento": "-",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Julio Fonseca"
+    },
+    {
+        "Nº LOJA": "B002", "REFERENCIA LOJA": "SÃO JOSÉ DOS CAMPOS", "UF": "SP", "ESTADO": "SÃO JOSÉ DOS CAMPOS",
+        "NOME": "Adriana Alves de A Carneira", "EMAIL": "-",
+        "TELEFONE": "11 97238-8029", "SETOR": "LOJA", "CARGO": "1045 - Lider de setor",
+        "N DO GRUPO": "2", "GRUPO": "LÍDERES LOJA", "SAP ID": "8324", "Gmail padrão Recebimento": "-",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Julio Fonseca"
+    },
+    {
+        "Nº LOJA": "B002", "REFERENCIA LOJA": "SÃO JOSÉ DOS CAMPOS", "UF": "SP", "ESTADO": "SÃO JOSÉ DOS CAMPOS",
+        "NOME": "Tatiane Tamizara Ferreira", "EMAIL": "tatiane.tamizara@vonnycosmeticos.com.br",
+        "TELEFONE": "11 97238-8029", "SETOR": "COORDENADOR", "CARGO": "1045 - Lider de setor",
+        "N DO GRUPO": "2", "GRUPO": "LÍDERES LOJA", "SAP ID": "-", "Gmail padrão Recebimento": "-",
+        "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Julio Fonseca"
+    }
+]
 
 # ==============================================================================
 # MAPEAMENTO EXATO DAS REGIONAIS
@@ -113,7 +190,6 @@ EMAILS_PERMITIDOS_PADRAO = {
     "cibele.santos@vonnycosmeticos.com.br": ("B008", "Líder de Loja"),
     "jeane.lopes@vonnycosmeticos.com.br": ("B010", "Líder de Loja"),
     "thais.amorim@vonnycosmeticos.com.br": ("B011", "Líder de Loja"),
-    "jeane.lopes@vonnycosmeticos.com.br": ("B012", "Líder de Loja"),
     "juliana.lima@vonnycosmeticos.com.br": ("B013", "Líder de Loja"),
     "luciana.inacio@vonnycosmeticos.com.br": ("B015", "Líder de Loja"),
     "tabatta.silva@vonnycosmeticos.com.br": ("B016", "Líder de Loja"),
@@ -228,6 +304,25 @@ def atualizar_senha_com_historico(email, nova_senha_texto, usuarios_dict, removi
     
     salvar_dados_db(usuarios_dict, removidos_set, historico_remocoes, historico_resets)
     return True, "✅ Senha alterada com sucesso!"
+
+# --- FUNÇÕES DE CARREGAMENTO E SALVAMENTO DE LOJAS/CONTATOS ---
+def carregar_dados_lojas():
+    if os.path.exists(LOJAS_DB_FILE):
+        try:
+            with open(LOJAS_DB_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("dados_lojas", DADOS_LOJAS_INICIAIS), data.get("historico_mudancas", [])
+        except Exception:
+            return DADOS_LOJAS_INICIAIS, []
+    else:
+        return DADOS_LOJAS_INICIAIS, []
+
+def salvar_dados_lojas(dados_lojas, historico_mudancas):
+    with open(LOJAS_DB_FILE, "w", encoding="utf-8") as f:
+        json.dump({
+            "dados_lojas": dados_lojas,
+            "historico_mudancas": historico_mudancas
+        }, f, indent=4, ensure_ascii=False)
 
 # --- LEITURA E TRATAMENTO DA PLANILHA NUVEM ---
 @st.cache_data(ttl=60)
@@ -402,6 +497,86 @@ def renderizar_tela_troca_obrigatoria():
             st.rerun()
         else:
             st.error(msg)
+
+# --- ABA DE GESTÃO DE LOJAS E CONTATOS (NOVO MÓDULO) ---
+def renderizar_aba_gestao_lojas():
+    st.header("🏬 Gestão de Contatos das Lojas e Histórico de Mudanças")
+    dados_lojas, historico_mudancas = carregar_dados_lojas()
+    df_lojas = pd.DataFrame(dados_lojas)
+
+    tab_vis, tab_edit, tab_logs = st.tabs(["📊 Visão Geral (Tabela)", "✏️ Atualizar / Editar Dados", "📜 Histórico de Mudanças"])
+
+    with tab_vis:
+        st.subheader("📋 Tabela Consolidada de Lojas e Contatos")
+        st.dataframe(df_lojas, use_container_width=True)
+
+    with tab_edit:
+        st.subheader("📝 Adicionar ou Modificar Registro de Loja")
+        loja_opcoes = ["-- Nova Entrada --"] + list(df_lojas["REFERENCIA LOJA"].unique()) if not df_lojas.empty else ["-- Nova Entrada --"]
+        loja_sel = st.selectbox("Selecione uma Loja Existente para Editar ou Crie Uma Nova:", loja_opcoes)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            num_loja = st.text_input("Nº Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+            ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+            uf = st.text_input("UF:", value="SP")
+            estado = st.text_input("Estado / Cidade:", value="SÃO PAULO")
+            nome = st.text_input("Nome do Colaborador:")
+
+        with col2:
+            email = st.text_input("E-mail:")
+            telefone = st.text_input("Telefone / Celular:")
+            setor = st.selectbox("Setor:", ["LOJA", "COORDENADOR", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO", "OUTRO"])
+            cargo = st.text_input("Cargo:")
+            num_grupo = st.text_input("Nº do Grupo:")
+
+        with col3:
+            grupo = st.text_input("Grupo:")
+            sap_id = st.text_input("SAP ID:")
+            gmail_rec = st.text_input("Gmail Padrão Recebimento:")
+            observacoes = st.text_area("Observações de Atualização (Coluna 1):", value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')}")
+
+        if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
+            novo_registro = {
+                "Nº LOJA": num_loja,
+                "REFERENCIA LOJA": ref_loja,
+                "UF": uf,
+                "ESTADO": estado,
+                "NOME": nome,
+                "EMAIL": email,
+                "TELEFONE": telefone,
+                "SETOR": setor,
+                "CARGO": cargo,
+                "N DO GRUPO": num_grupo,
+                "GRUPO": grupo,
+                "SAP ID": sap_id,
+                "Gmail padrão Recebimento": gmail_rec,
+                "Coluna 1": observacoes
+            }
+
+            dados_lojas.append(novo_registro)
+
+            usr_atual = st.session_state.get("usuario_atual", "Administrador")
+            log_mudanca = {
+                "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                "Usuário Responsável": usr_atual,
+                "Loja Afetada": f"{num_loja} - {ref_loja}",
+                "Colaborador": nome,
+                "Descrição da Mudança": f"Cadastrado/Atualizado contato do setor {setor} ({cargo})."
+            }
+            historico_mudancas.append(log_mudanca)
+
+            salvar_dados_lojas(dados_lojas, historico_mudancas)
+            st.success("✅ Informações salvas com sucesso no banco de dados!")
+            st.rerun()
+
+    with tab_logs:
+        st.subheader("📜 Histórico e Registro de Mudanças")
+        if historico_mudancas:
+            df_logs = pd.DataFrame(historico_mudancas)
+            st.dataframe(df_logs, use_container_width=True)
+        else:
+            st.info("Nenhuma mudança registrada até o momento.")
 
 # --- ABA PAINEL ADMIN ---
 def renderizar_aba_admin():
@@ -1203,10 +1378,16 @@ else:
     perfil_logado = dados_logado.get("perfil", "Gerente")
 
     if perfil_logado == "Administrador":
-        aba_dash, aba_admin = st.tabs(["📊 Dashboard Geral", "⚙️ Painel Admin"])
+        aba_dash, aba_lojas, aba_admin = st.tabs(["📊 Dashboard Geral", "🏬 Gestão de Lojas e Mudanças", "⚙️ Painel Admin"])
         with aba_dash:
             renderizar_dashboard()
+        with aba_lojas:
+            renderizar_aba_gestao_lojas()
         with aba_admin:
             renderizar_aba_admin()
     else:
-        renderizar_dashboard()
+        aba_dash, aba_lojas = st.tabs(["📊 Dashboard Geral", "🏬 Gestão de Lojas e Mudanças"])
+        with aba_dash:
+            renderizar_dashboard()
+        with aba_lojas:
+            renderizar_aba_gestao_lojas()
