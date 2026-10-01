@@ -2190,7 +2190,70 @@ DADOS_LOJAS_INICIAIS = [
         "Gmail padrão Recebimento": "-",
         "Coluna 1": "Atualizado em 22/09/2026 Whats Gerente Jorgiane Aragão",
     },
-
+    {
+        "Nº LOJA": "B032",
+        "REFERENCIA LOJA": "SALVADOR 2",
+        "UF": "BA",
+        "ESTADO": "BAHIA",
+        "NOME": "-",
+        "EMAIL": "-",
+        "TELEFONE": "-",
+        "SETOR": "LOJA",
+        "CARGO": "-",
+        "N DO GRUPO": "1",
+        "GRUPO": "GERENTES LOJA",
+        "SAP ID": "-",
+        "Gmail padrão Recebimento": "-",
+        "Coluna 1": "-",
+    },
+    {
+        "Nº LOJA": "B032",
+        "REFERENCIA LOJA": "SALVADOR 2",
+        "UF": "BA",
+        "ESTADO": "BAHIA",
+        "NOME": "-",
+        "EMAIL": "-",
+        "TELEFONE": "-",
+        "SETOR": "LOJA",
+        "CARGO": "-",
+        "N DO GRUPO": "2",
+        "GRUPO": "LÍDERES LOJA",
+        "SAP ID": "-",
+        "Gmail padrão Recebimento": "-",
+        "Coluna 1": "-",
+    },
+    {
+        "Nº LOJA": "B032",
+        "REFERENCIA LOJA": "SALVADOR 2",
+        "UF": "BA",
+        "ESTADO": "BAHIA",
+        "NOME": "-",
+        "EMAIL": "-",
+        "TELEFONE": "-",
+        "SETOR": "ADMINISTRATIVO",
+        "CARGO": "-",
+        "N DO GRUPO": "3",
+        "GRUPO": "ADMINISTRATIVO",
+        "SAP ID": "-",
+        "Gmail padrão Recebimento": "-",
+        "Coluna 1": "-",
+    },
+    {
+        "Nº LOJA": "B032",
+        "REFERENCIA LOJA": "SALVADOR 2",
+        "UF": "BA",
+        "ESTADO": "BAHIA",
+        "NOME": "-",
+        "EMAIL": "-",
+        "TELEFONE": "-",
+        "SETOR": "RECEBIMENTO / TROCAS",
+        "CARGO": "-",
+        "N DO GRUPO": "7",
+        "GRUPO": "RECEBIMENTO / TROCAS",
+        "SAP ID": "-",
+        "Gmail padrão Recebimento": "-",
+        "Coluna 1": "-",
+    },
 ]
 # ==============================================================================
 # MAPEAMENTO EXATO DAS REGIONAIS
@@ -2750,17 +2813,85 @@ def renderizar_aba_gestao_lojas():
                     "Coluna 1": observacoes
                 }
 
-                dados_lojas.append(novo_registro)
+                # Se o colaborador já existir pelo nome, não cria duplicidade.
+                # Se estiver em outra loja, realiza a transferência automaticamente.
+                nome_normalizado = str(nome).strip().casefold()
+                indices_mesmo_nome = [
+                    i for i, registro in enumerate(dados_lojas)
+                    if nome_normalizado and str(registro.get("NOME", "")).strip().casefold() == nome_normalizado
+                ]
 
                 usr_atual = st.session_state.get("usuario_atual", "Administrador")
-                historico_mudancas.append({
-                    "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                    "Usuário Responsável": usr_atual,
-                    "Loja Afetada": f"{num_loja} - {ref_loja}",
-                    "Colaborador": nome,
-                    "Descrição da Mudança": f"Cadastrado/Atualizado contato do setor {setor} ({cargo}).",
-                    "Observações": observacoes
-                })
+                registro_existente = None
+                indice_existente = None
+
+                if indices_mesmo_nome:
+                    # Preferimos um registro já existente na loja de destino.
+                    for i in indices_mesmo_nome:
+                        if (str(dados_lojas[i].get("Nº LOJA", "")).strip().casefold() == str(num_loja).strip().casefold()
+                                or str(dados_lojas[i].get("REFERENCIA LOJA", "")).strip().casefold() == str(ref_loja).strip().casefold()):
+                            indice_existente = i
+                            registro_existente = dados_lojas[i]
+                            break
+
+                    # Caso não esteja na loja de destino, é uma transferência.
+                    if indice_existente is None:
+                        indice_existente = indices_mesmo_nome[0]
+                        registro_existente = dados_lojas[indice_existente]
+                        loja_origem_num = str(registro_existente.get("Nº LOJA", "")).strip()
+                        loja_origem_ref = str(registro_existente.get("REFERENCIA LOJA", "")).strip()
+                        loja_destino_num = str(num_loja).strip()
+                        loja_destino_ref = str(ref_loja).strip()
+
+                        # Gerente e Líder de Loja não podem retirar/transferir alguém de outra loja.
+                        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                            lojas_permitidas_transfer = [
+                                x.strip().upper()
+                                for x in str(loja_usuario).replace(" ", ",").split(",")
+                                if x.strip()
+                            ]
+                            if loja_origem_num.upper() not in lojas_permitidas_transfer:
+                                st.error("❌ Este colaborador está vinculado a outra loja. Apenas Administrador, Controladoria e Regionais podem realizar essa transferência.")
+                                return
+
+                        # Remove o registro da loja antiga antes de inserir na nova.
+                        dados_lojas.pop(indice_existente)
+                        novo_registro["Gmail padrão Recebimento"] = registro_existente.get("Gmail padrão Recebimento", "")
+                        dados_lojas.append(novo_registro)
+
+                        historico_mudancas.append({
+                            "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Usuário Responsável": usr_atual,
+                            "Loja Afetada": f"{loja_destino_num} - {loja_destino_ref}",
+                            "Colaborador": nome,
+                            "Descrição da Mudança": f"Colaborador transferido de {loja_origem_num} - {loja_origem_ref} para {loja_destino_num} - {loja_destino_ref}.",
+                            "Observações": observacoes
+                        })
+                        salvar_dados_lojas(dados_lojas, historico_mudancas)
+                        st.success(f"✅ {nome} foi transferido automaticamente de {loja_origem_num} - {loja_origem_ref} para {loja_destino_num} - {loja_destino_ref}.")
+                        st.rerun()
+
+                    # Se já estiver na mesma loja, atualiza o cadastro existente.
+                    else:
+                        dados_lojas[indice_existente] = novo_registro
+                        historico_mudancas.append({
+                            "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Usuário Responsável": usr_atual,
+                            "Loja Afetada": f"{num_loja} - {ref_loja}",
+                            "Colaborador": nome,
+                            "Descrição da Mudança": f"Cadastro do colaborador atualizado no setor {setor} ({cargo}).",
+                            "Observações": observacoes
+                        })
+                else:
+                    dados_lojas.append(novo_registro)
+                    historico_mudancas.append({
+                        "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        "Usuário Responsável": usr_atual,
+                        "Loja Afetada": f"{num_loja} - {ref_loja}",
+                        "Colaborador": nome,
+                        "Descrição da Mudança": f"Cadastrado contato do setor {setor} ({cargo}).",
+                        "Observações": observacoes
+                    })
 
                 salvar_dados_lojas(dados_lojas, historico_mudancas)
                 st.success("✅ Informações salvas com sucesso no banco de dados!")
