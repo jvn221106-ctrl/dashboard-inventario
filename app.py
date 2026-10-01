@@ -2649,6 +2649,8 @@ def renderizar_aba_gestao_lojas():
                 df_lojas["Nº LOJA"].astype(str).str.strip().str.upper().isin(lojas_permitidas)
             ].copy()
 
+        # Oculta o SAP ID somente na tabela consolidada.
+        df_lojas_vis = df_lojas_vis.drop(columns=["SAP ID"], errors="ignore")
         st.dataframe(df_lojas_vis, use_container_width=True)
 
     with tab_edit:
