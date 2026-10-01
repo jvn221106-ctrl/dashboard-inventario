@@ -2657,9 +2657,6 @@ def renderizar_aba_gestao_lojas():
         st.subheader("📝 Adicionar ou Modificar Registro de Loja")
 
         # Gerentes e Líderes de Loja só podem trabalhar com a própria loja.
-        # Para esses perfis, não existe a opção de criar uma nova loja nem de
-        # selecionar outra loja. Administrador, Controladoria e demais perfis
-        # mantêm o comportamento original.
         if perfil_usuario in ["Gerente", "Líder de Loja"]:
             lojas_permitidas_edit = [
                 x.strip().upper()
@@ -2677,11 +2674,7 @@ def renderizar_aba_gestao_lojas():
             if not loja_opcoes:
                 st.error("❌ Nenhuma loja está vinculada ao seu usuário.")
                 return
-            loja_sel = st.selectbox(
-                "Loja autorizada para edição:",
-                loja_opcoes,
-                disabled=True
-            )
+            loja_sel = st.selectbox("Loja autorizada para edição:", loja_opcoes, disabled=True)
             loja_num_autorizada, loja_ref_autorizada = [x.strip() for x in loja_sel.split(" - ", 1)]
         else:
             loja_opcoes = ["-- Nova Entrada --"] + list(df_lojas["REFERENCIA LOJA"].unique()) if not df_lojas.empty else ["-- Nova Entrada --"]
@@ -2689,99 +2682,159 @@ def renderizar_aba_gestao_lojas():
             loja_num_autorizada = "" if loja_sel == "-- Nova Entrada --" else loja_sel
             loja_ref_autorizada = "" if loja_sel == "-- Nova Entrada --" else loja_sel
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if perfil_usuario in ["Gerente", "Líder de Loja"]:
-                num_loja = st.text_input("Nº Loja:", value=loja_num_autorizada, disabled=True)
-                ref_loja = st.text_input("Referência Loja:", value=loja_ref_autorizada, disabled=True)
+        # Ação: permite retirar um colaborador sem apagar a loja inteira.
+        acao = st.radio(
+            "Ação:",
+            ["Adicionar / Atualizar colaborador", "🚪 Retirar colaborador da loja"],
+            horizontal=True
+        )
+
+        if acao == "🚪 Retirar colaborador da loja":
+            if loja_sel == "-- Nova Entrada --":
+                st.info("Selecione uma loja existente para retirar um colaborador.")
             else:
-                num_loja = st.text_input("Nº Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
-                ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
-            uf = st.text_input("UF:", value="SP")
-            estado = st.text_input("Estado / Cidade:", value="SÃO PAULO")
-            nome = st.text_input("Nome do Colaborador:")
+                registros_loja = df_lojas[
+                    df_lojas["REFERENCIA LOJA"].astype(str).str.strip() == str(loja_ref_autorizada).strip()
+                ].copy()
+                registros_loja = registros_loja[registros_loja["NOME"].fillna("").astype(str).str.strip() != ""]
 
-        with col2:
-            email = st.text_input("E-mail:")
-            telefone = st.text_input("Telefone / Celular:")
-            setor = st.selectbox("Setor:", ["LOJA", "COORDENADOR", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO", "OUTRO"])
-            cargo = st.text_input("Cargo:")
+                if registros_loja.empty:
+                    st.info("Nenhum colaborador cadastrado nesta loja.")
+                else:
+                    registros_loja["_COLAB"] = (
+                        registros_loja["NOME"].astype(str).str.strip() +
+                        " — " + registros_loja["GRUPO"].fillna("").astype(str).str.strip()
+                    )
+                    colaborador_sel = st.selectbox(
+                        "Selecione o colaborador que saiu da loja:",
+                        registros_loja["_COLAB"].tolist()
+                    )
+                    idx_colaborador = registros_loja.index[registros_loja["_COLAB"] == colaborador_sel][0]
+                    observacao_saida = st.text_area(
+                        "Observações da saída *",
+                        placeholder="Ex.: Desligamento, transferência para outra loja, mudança de função..."
+                    )
 
-            # O Nº do Grupo é vinculado automaticamente ao Grupo.
-            mapa_grupo_numero = {}
-            if not df_lojas.empty and "GRUPO" in df_lojas.columns and "N DO GRUPO" in df_lojas.columns:
-                for _, registro_grupo in df_lojas[["GRUPO", "N DO GRUPO"]].dropna().iterrows():
-                    nome_grupo = str(registro_grupo["GRUPO"]).strip()
-                    numero_grupo = str(registro_grupo["N DO GRUPO"]).strip()
-                    if nome_grupo and numero_grupo and nome_grupo.lower() not in ["nan", "none"]:
-                        mapa_grupo_numero.setdefault(nome_grupo, numero_grupo)
+                    if st.button("🚪 Retirar Colaborador", type="primary"):
+                        if not observacao_saida.strip():
+                            st.error("❌ Informe uma observação para registrar a saída do colaborador.")
+                        else:
+                            colaborador = dados_lojas[idx_colaborador]
+                            nome_removido = str(colaborador.get("NOME", "")).strip()
+                            dados_lojas.pop(idx_colaborador)
 
-            grupos_disponiveis = sorted(mapa_grupo_numero.keys())
-            grupo_atual_registro = ""
-            if loja_sel != "-- Nova Entrada --" and not df_lojas.empty:
-                registros_loja = df_lojas[df_lojas["REFERENCIA LOJA"].astype(str) == str(loja_ref_autorizada)]
-                if not registros_loja.empty and "GRUPO" in registros_loja.columns:
-                    valores_grupo = registros_loja["GRUPO"].dropna().astype(str).str.strip()
-                    if not valores_grupo.empty:
-                        grupo_atual_registro = valores_grupo.iloc[0]
+                            usr_atual = st.session_state.get("usuario_atual", "Administrador")
+                            historico_mudancas.append({
+                                "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                "Usuário Responsável": usr_atual,
+                                "Loja Afetada": f"{colaborador.get('Nº LOJA', '')} - {colaborador.get('REFERENCIA LOJA', '')}",
+                                "Colaborador": nome_removido,
+                                "Descrição da Mudança": "Colaborador retirado da loja.",
+                                "Observações": observacao_saida.strip()
+                            })
+                            salvar_dados_lojas(dados_lojas, historico_mudancas)
+                            st.success(f"✅ {nome_removido} foi retirado da loja e a saída foi registrada.")
+                            st.rerun()
+        else:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                    num_loja = st.text_input("Nº Loja:", value=loja_num_autorizada, disabled=True)
+                    ref_loja = st.text_input("Referência Loja:", value=loja_ref_autorizada, disabled=True)
+                else:
+                    num_loja = st.text_input("Nº Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+                    ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+                uf = st.text_input("UF:", value="SP")
+                estado = st.text_input("Estado / Cidade:", value="SÃO PAULO")
+                nome = st.text_input("Nome do Colaborador:")
 
-            grupo_inicial = grupo_atual_registro if grupo_atual_registro in grupos_disponiveis else (grupos_disponiveis[0] if grupos_disponiveis else "")
-            grupo = st.selectbox("Grupo:", grupos_disponiveis, index=grupos_disponiveis.index(grupo_inicial) if grupo_inicial in grupos_disponiveis else 0, disabled=False) if grupos_disponiveis else st.text_input("Grupo:")
-            num_grupo = mapa_grupo_numero.get(grupo, "")
-            st.text_input("Nº do Grupo:", value=num_grupo, disabled=True)
-            gmail_rec = st.text_input(
-                "Gmail Padrão Recebimento:",
-                disabled=(perfil_usuario != "Administrador")
-            )
-            observacoes = st.text_area("Observações de Atualização (Coluna 1):", value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')}")
+            with col2:
+                email = st.text_input("E-mail:")
+                telefone = st.text_input("Telefone / Celular:")
+                setor = st.selectbox("Setor:", ["LOJA", "COORDENADOR", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO", "OUTRO"])
+                cargo = st.text_input("Cargo:")
 
-        if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
-            if perfil_usuario in ["Gerente", "Líder de Loja"]:
-                lojas_permitidas_save = [
-                    x.strip().upper()
-                    for x in str(loja_usuario).replace(" ", ",").split(",")
-                    if x.strip()
-                ]
-                if str(num_loja).strip().upper() not in lojas_permitidas_save:
-                    st.error("❌ Você só pode alterar registros da sua própria loja.")
-                    return
+                # O Nº do Grupo é vinculado automaticamente ao Grupo.
+                mapa_grupo_numero = {}
+                if not df_lojas.empty and "GRUPO" in df_lojas.columns and "N DO GRUPO" in df_lojas.columns:
+                    for _, registro_grupo in df_lojas[["GRUPO", "N DO GRUPO"]].dropna().iterrows():
+                        nome_grupo = str(registro_grupo["GRUPO"]).strip()
+                        numero_grupo = str(registro_grupo["N DO GRUPO"]).strip()
+                        if nome_grupo and numero_grupo and nome_grupo.lower() not in ["nan", "none"]:
+                            mapa_grupo_numero.setdefault(nome_grupo, numero_grupo)
 
-            novo_registro = {
-                "Nº LOJA": num_loja,
-                "REFERENCIA LOJA": ref_loja,
-                "UF": uf,
-                "ESTADO": estado,
-                "NOME": nome,
-                "EMAIL": email,
-                "TELEFONE": telefone,
-                "SETOR": setor,
-                "CARGO": cargo,
-                "N DO GRUPO": num_grupo,
-                "GRUPO": grupo,
-                "Gmail padrão Recebimento": gmail_rec,
-                "Coluna 1": observacoes
-            }
+                grupos_disponiveis = sorted(mapa_grupo_numero.keys())
+                grupo_atual_registro = ""
+                if loja_sel != "-- Nova Entrada --" and not df_lojas.empty:
+                    registros_loja = df_lojas[df_lojas["REFERENCIA LOJA"].astype(str) == str(loja_ref_autorizada)]
+                    if not registros_loja.empty and "GRUPO" in registros_loja.columns:
+                        valores_grupo = registros_loja["GRUPO"].dropna().astype(str).str.strip()
+                        if not valores_grupo.empty:
+                            grupo_atual_registro = valores_grupo.iloc[0]
 
-            dados_lojas.append(novo_registro)
+                grupo_inicial = grupo_atual_registro if grupo_atual_registro in grupos_disponiveis else (grupos_disponiveis[0] if grupos_disponiveis else "")
+                grupo = st.selectbox("Grupo:", grupos_disponiveis, index=grupos_disponiveis.index(grupo_inicial) if grupo_inicial in grupos_disponiveis else 0, disabled=False) if grupos_disponiveis else st.text_input("Grupo:")
+                num_grupo = mapa_grupo_numero.get(grupo, "")
+                st.text_input("Nº do Grupo:", value=num_grupo, disabled=True)
+                gmail_rec = st.text_input(
+                    "Gmail Padrão Recebimento:",
+                    disabled=(perfil_usuario != "Administrador")
+                )
+                observacoes = st.text_area(
+                    "Observações:",
+                    placeholder="Informe qualquer observação sobre o cadastro ou alteração.",
+                    value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')}"
+                )
 
-            usr_atual = st.session_state.get("usuario_atual", "Administrador")
-            log_mudanca = {
-                "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                "Usuário Responsável": usr_atual,
-                "Loja Afetada": f"{num_loja} - {ref_loja}",
-                "Colaborador": nome,
-                "Descrição da Mudança": f"Cadastrado/Atualizado contato do setor {setor} ({cargo})."
-            }
-            historico_mudancas.append(log_mudanca)
+            if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
+                if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                    lojas_permitidas_save = [
+                        x.strip().upper()
+                        for x in str(loja_usuario).replace(" ", ",").split(",")
+                        if x.strip()
+                    ]
+                    if str(num_loja).strip().upper() not in lojas_permitidas_save:
+                        st.error("❌ Você só pode alterar registros da sua própria loja.")
+                        return
 
-            salvar_dados_lojas(dados_lojas, historico_mudancas)
-            st.success("✅ Informações salvas com sucesso no banco de dados!")
-            st.rerun()
+                novo_registro = {
+                    "Nº LOJA": num_loja,
+                    "REFERENCIA LOJA": ref_loja,
+                    "UF": uf,
+                    "ESTADO": estado,
+                    "NOME": nome,
+                    "EMAIL": email,
+                    "TELEFONE": telefone,
+                    "SETOR": setor,
+                    "CARGO": cargo,
+                    "N DO GRUPO": num_grupo,
+                    "GRUPO": grupo,
+                    "Gmail padrão Recebimento": gmail_rec,
+                    "Coluna 1": observacoes
+                }
+
+                dados_lojas.append(novo_registro)
+
+                usr_atual = st.session_state.get("usuario_atual", "Administrador")
+                historico_mudancas.append({
+                    "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "Usuário Responsável": usr_atual,
+                    "Loja Afetada": f"{num_loja} - {ref_loja}",
+                    "Colaborador": nome,
+                    "Descrição da Mudança": f"Cadastrado/Atualizado contato do setor {setor} ({cargo}).",
+                    "Observações": observacoes
+                })
+
+                salvar_dados_lojas(dados_lojas, historico_mudancas)
+                st.success("✅ Informações salvas com sucesso no banco de dados!")
+                st.rerun()
 
     with tab_logs:
         st.subheader("📜 Histórico e Registro de Mudanças")
         if historico_mudancas:
             df_logs = pd.DataFrame(historico_mudancas)
+            if "Observações" not in df_logs.columns:
+                df_logs["Observações"] = ""
             st.dataframe(df_logs, use_container_width=True)
         else:
             st.info("Nenhuma mudança registrada até o momento.")
