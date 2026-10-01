@@ -2727,7 +2727,6 @@ def renderizar_aba_gestao_lojas():
             grupo = st.selectbox("Grupo:", grupos_disponiveis, index=grupos_disponiveis.index(grupo_inicial) if grupo_inicial in grupos_disponiveis else 0, disabled=False) if grupos_disponiveis else st.text_input("Grupo:")
             num_grupo = mapa_grupo_numero.get(grupo, "")
             st.text_input("Nº do Grupo:", value=num_grupo, disabled=True)
-            sap_id = st.text_input("SAP ID:")
             gmail_rec = st.text_input(
                 "Gmail Padrão Recebimento:",
                 disabled=(perfil_usuario != "Administrador")
@@ -2757,7 +2756,6 @@ def renderizar_aba_gestao_lojas():
                 "CARGO": cargo,
                 "N DO GRUPO": num_grupo,
                 "GRUPO": grupo,
-                "SAP ID": sap_id,
                 "Gmail padrão Recebimento": gmail_rec,
                 "Coluna 1": observacoes
             }
