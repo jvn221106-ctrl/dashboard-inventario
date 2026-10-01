@@ -2629,7 +2629,27 @@ def renderizar_aba_gestao_lojas():
 
     with tab_vis:
         st.subheader("📋 Tabela Consolidada de Lojas e Contatos")
-        st.dataframe(df_lojas, use_container_width=True)
+
+        # Filtra a tabela conforme o perfil e as lojas vinculadas ao usuário.
+        email_logado = st.session_state.get("usuario_atual")
+        usuarios, _, _, _ = carregar_dados_db()
+        dados_usr = usuarios.get(email_logado, {})
+        perfil_usuario = dados_usr.get("perfil", "Gerente")
+        loja_usuario = dados_usr.get("loja", "")
+
+        if perfil_usuario in ["Administrador", "Controladoria"]:
+            df_lojas_vis = df_lojas.copy()
+        else:
+            lojas_permitidas = [
+                x.strip().upper()
+                for x in str(loja_usuario).replace(" ", ",").split(",")
+                if x.strip()
+            ]
+            df_lojas_vis = df_lojas[
+                df_lojas["Nº LOJA"].astype(str).str.strip().str.upper().isin(lojas_permitidas)
+            ].copy()
+
+        st.dataframe(df_lojas_vis, use_container_width=True)
 
     with tab_edit:
         st.subheader("📝 Adicionar ou Modificar Registro de Loja")
