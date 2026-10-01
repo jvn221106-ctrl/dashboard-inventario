@@ -2951,7 +2951,6 @@ def renderizar_dashboard():
         else:
             lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
             lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] or lojas_disponiveis
-            st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
 
         marcas_unicas = [str(x) for x in df['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
         marcas_sel = st.sidebar.multiselect("Marcas (Geral):", options=sorted(marcas_unicas), default=sorted(marcas_unicas))
