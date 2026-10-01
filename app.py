@@ -2704,10 +2704,29 @@ def renderizar_aba_gestao_lojas():
             telefone = st.text_input("Telefone / Celular:")
             setor = st.selectbox("Setor:", ["LOJA", "COORDENADOR", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO", "OUTRO"])
             cargo = st.text_input("Cargo:")
-            num_grupo = st.text_input("Nº do Grupo:")
 
-        with col3:
-            grupo = st.text_input("Grupo:")
+            # O Nº do Grupo é vinculado automaticamente ao Grupo.
+            mapa_grupo_numero = {}
+            if not df_lojas.empty and "GRUPO" in df_lojas.columns and "N DO GRUPO" in df_lojas.columns:
+                for _, registro_grupo in df_lojas[["GRUPO", "N DO GRUPO"]].dropna().iterrows():
+                    nome_grupo = str(registro_grupo["GRUPO"]).strip()
+                    numero_grupo = str(registro_grupo["N DO GRUPO"]).strip()
+                    if nome_grupo and numero_grupo and nome_grupo.lower() not in ["nan", "none"]:
+                        mapa_grupo_numero.setdefault(nome_grupo, numero_grupo)
+
+            grupos_disponiveis = sorted(mapa_grupo_numero.keys())
+            grupo_atual_registro = ""
+            if loja_sel != "-- Nova Entrada --" and not df_lojas.empty:
+                registros_loja = df_lojas[df_lojas["REFERENCIA LOJA"].astype(str) == str(loja_ref_autorizada)]
+                if not registros_loja.empty and "GRUPO" in registros_loja.columns:
+                    valores_grupo = registros_loja["GRUPO"].dropna().astype(str).str.strip()
+                    if not valores_grupo.empty:
+                        grupo_atual_registro = valores_grupo.iloc[0]
+
+            grupo_inicial = grupo_atual_registro if grupo_atual_registro in grupos_disponiveis else (grupos_disponiveis[0] if grupos_disponiveis else "")
+            grupo = st.selectbox("Grupo:", grupos_disponiveis, index=grupos_disponiveis.index(grupo_inicial) if grupo_inicial in grupos_disponiveis else 0, disabled=False) if grupos_disponiveis else st.text_input("Grupo:")
+            num_grupo = mapa_grupo_numero.get(grupo, "")
+            st.text_input("Nº do Grupo:", value=num_grupo, disabled=True)
             sap_id = st.text_input("SAP ID:")
             gmail_rec = st.text_input("Gmail Padrão Recebimento:")
             observacoes = st.text_area("Observações de Atualização (Coluna 1):", value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')}")
