@@ -3507,6 +3507,7 @@ else:
         with aba_admin:
             renderizar_aba_admin()
     else:
+    if perfil_logado == "Gerente", "Líder de Loja":
         aba_dash, aba_lojas = st.tabs(["📊 Dashboard Geral", "🏬 Gestão de Lojas e Mudanças"])
         with aba_dash:
             renderizar_dashboard()
