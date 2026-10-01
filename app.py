@@ -2653,13 +2653,48 @@ def renderizar_aba_gestao_lojas():
 
     with tab_edit:
         st.subheader("📝 Adicionar ou Modificar Registro de Loja")
-        loja_opcoes = ["-- Nova Entrada --"] + list(df_lojas["REFERENCIA LOJA"].unique()) if not df_lojas.empty else ["-- Nova Entrada --"]
-        loja_sel = st.selectbox("Selecione uma Loja Existente para Editar ou Crie Uma Nova:", loja_opcoes)
+
+        # Gerentes e Líderes de Loja só podem trabalhar com a própria loja.
+        # Para esses perfis, não existe a opção de criar uma nova loja nem de
+        # selecionar outra loja. Administrador, Controladoria e demais perfis
+        # mantêm o comportamento original.
+        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+            lojas_permitidas_edit = [
+                x.strip().upper()
+                for x in str(loja_usuario).replace(" ", ",").split(",")
+                if x.strip()
+            ]
+            lojas_edit_df = df_lojas[
+                df_lojas["Nº LOJA"].astype(str).str.strip().str.upper().isin(lojas_permitidas_edit)
+            ].copy()
+            lojas_edit_df["_OPCAO"] = (
+                lojas_edit_df["Nº LOJA"].astype(str).str.strip() + " - " +
+                lojas_edit_df["REFERENCIA LOJA"].astype(str).str.strip()
+            )
+            loja_opcoes = list(dict.fromkeys(lojas_edit_df["_OPCAO"].tolist()))
+            if not loja_opcoes:
+                st.error("❌ Nenhuma loja está vinculada ao seu usuário.")
+                return
+            loja_sel = st.selectbox(
+                "Loja autorizada para edição:",
+                loja_opcoes,
+                disabled=True
+            )
+            loja_num_autorizada, loja_ref_autorizada = [x.strip() for x in loja_sel.split(" - ", 1)]
+        else:
+            loja_opcoes = ["-- Nova Entrada --"] + list(df_lojas["REFERENCIA LOJA"].unique()) if not df_lojas.empty else ["-- Nova Entrada --"]
+            loja_sel = st.selectbox("Selecione uma Loja Existente para Editar ou Crie Uma Nova:", loja_opcoes)
+            loja_num_autorizada = "" if loja_sel == "-- Nova Entrada --" else loja_sel
+            loja_ref_autorizada = "" if loja_sel == "-- Nova Entrada --" else loja_sel
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            num_loja = st.text_input("Nº Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
-            ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+            if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                num_loja = st.text_input("Nº Loja:", value=loja_num_autorizada, disabled=True)
+                ref_loja = st.text_input("Referência Loja:", value=loja_ref_autorizada, disabled=True)
+            else:
+                num_loja = st.text_input("Nº Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+                ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
             uf = st.text_input("UF:", value="SP")
             estado = st.text_input("Estado / Cidade:", value="SÃO PAULO")
             nome = st.text_input("Nome do Colaborador:")
@@ -2678,6 +2713,16 @@ def renderizar_aba_gestao_lojas():
             observacoes = st.text_area("Observações de Atualização (Coluna 1):", value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')}")
 
         if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
+            if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                lojas_permitidas_save = [
+                    x.strip().upper()
+                    for x in str(loja_usuario).replace(" ", ",").split(",")
+                    if x.strip()
+                ]
+                if str(num_loja).strip().upper() not in lojas_permitidas_save:
+                    st.error("❌ Você só pode alterar registros da sua própria loja.")
+                    return
+
             novo_registro = {
                 "Nº LOJA": num_loja,
                 "REFERENCIA LOJA": ref_loja,
