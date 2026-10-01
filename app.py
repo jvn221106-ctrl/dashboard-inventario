@@ -2780,10 +2780,11 @@ def renderizar_aba_gestao_lojas():
                     "Gmail Padrão Recebimento:",
                     disabled=(perfil_usuario != "Administrador")
                 )
+                email_atualizacao = str(st.session_state.get("usuario_atual", "")).strip()
                 observacoes = st.text_area(
                     "Observações:",
-                    placeholder="Informe qualquer observação sobre o cadastro ou alteração.",
-                    value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')}"
+                    value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')} por {email_atualizacao}",
+                    disabled=True
                 )
 
             if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
