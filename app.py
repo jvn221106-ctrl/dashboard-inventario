@@ -2728,7 +2728,10 @@ def renderizar_aba_gestao_lojas():
             num_grupo = mapa_grupo_numero.get(grupo, "")
             st.text_input("Nº do Grupo:", value=num_grupo, disabled=True)
             sap_id = st.text_input("SAP ID:")
-            gmail_rec = st.text_input("Gmail Padrão Recebimento:")
+            gmail_rec = st.text_input(
+                "Gmail Padrão Recebimento:",
+                disabled=(perfil_usuario != "Administrador")
+            )
             observacoes = st.text_area("Observações de Atualização (Coluna 1):", value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')}")
 
         if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
