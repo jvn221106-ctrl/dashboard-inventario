@@ -3735,6 +3735,15 @@ def renderizar_dashboard():
         # disponíveis para o perfil do usuário.
         selecionar_todos = st.sidebar.button("☑️ Selecionar todos os filtros", type="primary")
 
+        # Quando acionado, o comando abaixo também é aplicado aos filtros
+        # locais de cada seção/gráfico do dashboard.
+        def _multiselect_filtro(label, options, key):
+            options = list(options)
+            if selecionar_todos:
+                st.session_state[key] = options
+            return st.multiselect(label, options=options, default=options, key=key)
+
+
         meses_unicos = sorted([x for x in df['Mes_Ano'].unique() if x != 'Sem Data'])
         if selecionar_todos:
             st.session_state["filtro_meses_geral"] = list(meses_unicos)
@@ -3776,7 +3785,9 @@ def renderizar_dashboard():
         elif perfil_usuario in ["Regional 1", "Regional 2"]:
             lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
             lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] if lojas_permitidas_usr else lojas_disponiveis
-            lojas_sel = st.sidebar.multiselect("Centros (Geral):", options=lojas_filtradas_usr, default=lojas_filtradas_usr)
+            if selecionar_todos:
+                st.session_state["filtro_lojas_geral_regional"] = list(lojas_filtradas_usr)
+            lojas_sel = st.sidebar.multiselect("Centros (Geral):", options=lojas_filtradas_usr, default=lojas_filtradas_usr, key="filtro_lojas_geral_regional")
         else:
             lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
             lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] or lojas_disponiveis
@@ -3828,9 +3839,9 @@ def renderizar_dashboard():
                 with st.expander("🔍 Filtro Local: Produtos (Unificado)"):
                     col_fu1, col_fu2, col_fu3 = st.columns(3)
                     with col_fu1:
-                        m_unif_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_perdas_prod['Marca_Nome'].unique()), default=sorted(df_perdas_prod['Marca_Nome'].unique()), key="f_prod_unif_marca")
+                        m_unif_sel = _multiselect_filtro("Filtrar Marcas:", sorted(df_perdas_prod['Marca_Nome'].unique()), "f_prod_unif_marca")
                     with col_fu2:
-                        mes_unif_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_perdas_prod['Mes_Ano'].unique()), default=sorted(df_perdas_prod['Mes_Ano'].unique()), key="f_prod_unif_mes")
+                        mes_unif_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_perdas_prod['Mes_Ano'].unique()), "f_prod_unif_mes")
                     with col_fu3:
                         top_n_unif = st.slider("Selecione o Top (Produtos Unificado):", min_value=10, max_value=100, value=15, step=5, key="top_prod_unif")
     
@@ -3911,10 +3922,10 @@ def renderizar_dashboard():
                         col_fl1, col_fl2, col_fl3 = st.columns(3)
                         with col_fl1:
                             marcas_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Marca_Nome'].unique())
-                            m_loja_sel = st.multiselect("Filtrar Marcas:", options=marcas_loja_opts, default=marcas_loja_opts, key="f_prod_loja_marca")
+                            m_loja_sel = _multiselect_filtro("Filtrar Marcas:", marcas_loja_opts, "f_prod_loja_marca")
                         with col_fl2:
                             meses_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Mes_Ano'].unique())
-                            mes_loja_sel = st.multiselect("Filtrar Mês/Ano:", options=meses_loja_opts, default=meses_loja_opts, key="f_prod_loja_mes")
+                            mes_loja_sel = _multiselect_filtro("Filtrar Mês/Ano:", meses_loja_opts, "f_prod_loja_mes")
                         with col_fl3:
                             top_n_loja = st.slider("Selecione o Top (Produtos por Loja):", min_value=10, max_value=100, value=10, step=5, key="top_prod_loja")
     
@@ -3998,9 +4009,9 @@ def renderizar_dashboard():
             with st.expander("🔍 Filtro Local: Comparativo Regional"):
                 col_fr1, col_fr2 = st.columns(2)
                 with col_fr1:
-                    m_reg_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_reg_marcas")
+                    m_reg_sel = _multiselect_filtro("Filtrar Marcas:", sorted(df_filtered['Marca_Nome'].unique()), "f_reg_marcas")
                 with col_fr2:
-                    mes_reg_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_reg_mes")
+                    mes_reg_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_filtered['Mes_Ano'].unique()), "f_reg_mes")
             
             df_reg_filtered = df_filtered[
                 (df_filtered['Marca_Nome'].isin(m_reg_sel)) &
@@ -4047,11 +4058,11 @@ def renderizar_dashboard():
                     top_n_centros = 10
 
                 with col_fc1:
-                    c_lojas_sel = st.multiselect("Filtrar Centros Específicos:", options=sorted(df_filtered['Loja_Nome'].unique()), default=sorted(df_filtered['Loja_Nome'].unique()), key="f_centro_lojas")
+                    c_lojas_sel = _multiselect_filtro("Filtrar Centros Específicos:", sorted(df_filtered['Loja_Nome'].unique()), "f_centro_lojas")
                 with col_fc2:
-                    c_marcas_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_centro_marcas")
+                    c_marcas_sel = _multiselect_filtro("Filtrar Marcas:", sorted(df_filtered['Marca_Nome'].unique()), "f_centro_marcas")
                 with col_fc3:
-                    c_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_centro_meses")
+                    c_meses_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_filtered['Mes_Ano'].unique()), "f_centro_meses")
 
             df_centros_local = df_filtered[
                 (df_filtered['Loja_Nome'].isin(c_lojas_sel)) &
@@ -4160,20 +4171,20 @@ def renderizar_dashboard():
             if perfil_usuario in ["Gerente", "Líder de Loja"]:
                 col_fm1, col_fm2, col_fm3 = st.columns(3)
                 with col_fm1:
-                    m_marcas_sel = st.multiselect("Filtrar Marcas Específicas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_marca_marcas")
+                    m_marcas_sel = _multiselect_filtro("Filtrar Marcas Específicas:", sorted(df_filtered['Marca_Nome'].unique()), "f_marca_marcas")
                 with col_fm2:
-                    m_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_marca_meses")
+                    m_meses_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_filtered['Mes_Ano'].unique()), "f_marca_meses")
                 with col_fm3:
                     top_n_marcas = st.slider("Selecione o Top (Marcas):", min_value=10, max_value=100, value=10, step=5, key="top_marcas")
                 m_centros_sel = sorted(df_filtered['Loja_Nome'].unique())
             else:
                 col_fm1, col_fm2, col_fm3, col_fm4 = st.columns(4)
                 with col_fm1:
-                    m_marcas_sel = st.multiselect("Filtrar Marcas Específicas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_marca_marcas")
+                    m_marcas_sel = _multiselect_filtro("Filtrar Marcas Específicas:", sorted(df_filtered['Marca_Nome'].unique()), "f_marca_marcas")
                 with col_fm2:
-                    m_centros_sel = st.multiselect("Filtrar Centros/Lojas:", options=sorted(df_filtered['Loja_Nome'].unique()), default=sorted(df_filtered['Loja_Nome'].unique()), key="f_marca_centros")
+                    m_centros_sel = _multiselect_filtro("Filtrar Centros/Lojas:", sorted(df_filtered['Loja_Nome'].unique()), "f_marca_centros")
                 with col_fm3:
-                    m_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_marca_meses")
+                    m_meses_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_filtered['Mes_Ano'].unique()), "f_marca_meses")
                 with col_fm4:
                     top_n_marcas = st.slider("Selecione o Top (Marcas):", min_value=10, max_value=100, value=10, step=5, key="top_marcas")
 
