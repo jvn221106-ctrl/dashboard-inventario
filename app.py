@@ -2629,72 +2629,520 @@ def renderizar_aba_gestao_lojas():
 
     with tab_vis:
         st.subheader("📋 Tabela Consolidada de Lojas e Contatos")
-        st.dataframe(df_lojas, use_container_width=True)
+
+        # Filtra a tabela conforme o perfil e as lojas vinculadas ao usuário.
+        email_logado = st.session_state.get("usuario_atual")
+        usuarios, _, _, _ = carregar_dados_db()
+        dados_usr = usuarios.get(email_logado, {})
+        perfil_usuario = dados_usr.get("perfil", "Gerente")
+        loja_usuario = dados_usr.get("loja", "")
+
+        if perfil_usuario in ["Administrador", "Controladoria"]:
+            df_lojas_vis = df_lojas.copy()
+        else:
+            lojas_permitidas = [
+                x.strip().upper()
+                for x in str(loja_usuario).replace(" ", ",").split(",")
+                if x.strip()
+            ]
+            df_lojas_vis = df_lojas[
+                df_lojas["Nº LOJA"].astype(str).str.strip().str.upper().isin(lojas_permitidas)
+            ].copy()
+
+        # Oculta o SAP ID somente na tabela consolidada.
+        df_lojas_vis = df_lojas_vis.drop(columns=["SAP ID"], errors="ignore")
+        st.dataframe(df_lojas_vis, use_container_width=True)
+
+        # Permite preencher diretamente os registros que ainda estão vazios.
+        # Registros já preenchidos continuam sendo alterados pela aba de edição.
+        def _campo_vazio(valor):
+            if pd.isna(valor):
+                return True
+            texto = str(valor).strip()
+            return texto == "" or texto in {"-", "nan", "None"}
+
+        if not df_lojas_vis.empty:
+            mascara_vazios = df_lojas_vis["NOME"].apply(_campo_vazio) if "NOME" in df_lojas_vis.columns else pd.Series(False, index=df_lojas_vis.index)
+            df_vazios = df_lojas_vis[mascara_vazios].copy()
+        else:
+            df_vazios = pd.DataFrame()
+
+        if not df_vazios.empty:
+            st.markdown("### ✏️ Preencher registros vazios diretamente na tabela")
+            st.caption("Use esta área somente para os espaços ainda vazios. Registros que já possuem colaborador continuam sendo atualizados pela aba 'Atualizar / Editar Dados'.")
+
+            # Grupos e respectivos números já cadastrados no banco.
+            mapa_grupo_numero = {}
+            if "GRUPO" in df_lojas.columns and "N DO GRUPO" in df_lojas.columns:
+                for _, rg in df_lojas[["GRUPO", "N DO GRUPO"]].dropna(how="all").iterrows():
+                    g = str(rg.get("GRUPO", "")).strip()
+                    n = str(rg.get("N DO GRUPO", "")).strip()
+                    if g and g not in {"-", "nan", "None"} and n and n not in {"-", "nan", "None"}:
+                        mapa_grupo_numero.setdefault(g, n)
+            grupos_disponiveis = sorted(mapa_grupo_numero.keys())
+
+            colunas_editaveis = [
+                "Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO", "NOME", "EMAIL",
+                "TELEFONE", "SETOR", "CARGO", "GRUPO", "N DO GRUPO",
+                "Gmail padrão Recebimento", "Coluna 1"
+            ]
+            colunas_editaveis = [c for c in colunas_editaveis if c in df_vazios.columns]
+            editor_df = df_vazios[colunas_editaveis].copy()
+
+            # Campos técnicos/preenchidos pela loja ficam bloqueados.
+            disabled_cols = [c for c in ["Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO", "SETOR", "N DO GRUPO", "Coluna 1"] if c in editor_df.columns]
+            if perfil_usuario != "Administrador" and "Gmail padrão Recebimento" in editor_df.columns:
+                disabled_cols.append("Gmail padrão Recebimento")
+
+            column_config = {}
+            if "GRUPO" in editor_df.columns and grupos_disponiveis:
+                column_config["GRUPO"] = st.column_config.SelectboxColumn(
+                    "GRUPO", options=grupos_disponiveis, required=False
+                )
+            if "N DO GRUPO" in editor_df.columns:
+                column_config["N DO GRUPO"] = st.column_config.TextColumn("Nº do Grupo")
+            if "Coluna 1" in editor_df.columns:
+                column_config["Coluna 1"] = st.column_config.TextColumn("Observações", disabled=True)
+
+            edited_vazios = st.data_editor(
+                editor_df,
+                key="editor_registros_vazios",
+                use_container_width=True,
+                hide_index=False,
+                disabled=disabled_cols,
+                column_config=column_config,
+                num_rows="fixed"
+            )
+
+            if st.button("💾 Salvar preenchimentos da tabela", type="primary", key="salvar_vazios_tabela"):
+                dados_lojas_atual = list(dados_lojas)
+                historico_atual = list(historico_mudancas)
+                usr_atual = st.session_state.get("usuario_atual", "Administrador")
+                alterou = False
+                erros = []
+
+                # Processa de baixo para cima para que remoções por transferência não
+                # alterem os índices das vagas que ainda serão preenchidas.
+                linhas_editadas = list(edited_vazios.iterrows())
+                linhas_editadas.sort(key=lambda item: item[0], reverse=True)
+                for idx, linha_editada in linhas_editadas:
+                    nome_novo = str(linha_editada.get("NOME", "")).strip()
+                    if not nome_novo or nome_novo in {"-", "nan", "None"}:
+                        continue
+
+                    # Localiza o registro original correspondente ao índice do DataFrame.
+                    idx_original = idx
+                    if idx_original not in df_lojas.index:
+                        continue
+                    registro_original = dados_lojas[idx_original]
+                    loja_destino_num = str(registro_original.get("Nº LOJA", linha_editada.get("Nº LOJA", ""))).strip()
+                    loja_destino_ref = str(registro_original.get("REFERENCIA LOJA", linha_editada.get("REFERENCIA LOJA", ""))).strip()
+
+                    # Segurança: gerente/líder só podem preencher a própria loja.
+                    if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                        permitidas = [x.strip().upper() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+                        if loja_destino_num.upper() not in permitidas:
+                            erros.append(f"{nome_novo}: loja não autorizada.")
+                            continue
+
+                    grupo_novo = str(linha_editada.get("GRUPO", "")).strip()
+                    num_grupo_novo = mapa_grupo_numero.get(grupo_novo, str(linha_editada.get("N DO GRUPO", "")).strip())
+                    email_rec_novo = str(linha_editada.get("Gmail padrão Recebimento", registro_original.get("Gmail padrão Recebimento", ""))).strip()
+                    observacao_auto = f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')} por {usr_atual}"
+
+                    novo_registro = dict(registro_original)
+                    novo_registro.update({
+                        "Nº LOJA": loja_destino_num,
+                        "REFERENCIA LOJA": loja_destino_ref,
+                        "NOME": nome_novo,
+                        "EMAIL": str(linha_editada.get("EMAIL", "")).strip(),
+                        "TELEFONE": str(linha_editada.get("TELEFONE", "")).strip(),
+                        "CARGO": str(linha_editada.get("CARGO", "")).strip(),
+                        "GRUPO": grupo_novo,
+                        "N DO GRUPO": num_grupo_novo,
+                        "Gmail padrão Recebimento": email_rec_novo if perfil_usuario == "Administrador" else registro_original.get("Gmail padrão Recebimento", ""),
+                        "Coluna 1": observacao_auto
+                    })
+
+                    nome_norm = nome_novo.casefold()
+                    indices_nome = [
+                        i for i, r in enumerate(dados_lojas_atual)
+                        if i != idx_original and nome_norm and str(r.get("NOME", "")).strip().casefold() == nome_norm
+                    ]
+
+                    if indices_nome:
+                        origem_idx = indices_nome[0]
+                        origem = dados_lojas_atual[origem_idx]
+                        origem_num = str(origem.get("Nº LOJA", "")).strip()
+                        origem_ref = str(origem.get("REFERENCIA LOJA", "")).strip()
+
+                        # Para preencher uma vaga, a transferência de alguém de outra loja
+                        # também respeita as permissões de gerente/líder.
+                        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                            permitidas = [x.strip().upper() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+                            if origem_num.upper() not in permitidas:
+                                erros.append(f"{nome_novo}: colaborador pertence a outra loja.")
+                                continue
+
+                        if not email_rec_novo:
+                            novo_registro["Gmail padrão Recebimento"] = origem.get("Gmail padrão Recebimento", "")
+                        # Remove a pessoa da loja de origem e preenche a vaga.
+                        dados_lojas_atual.pop(origem_idx)
+                        # Ajusta o índice da vaga caso ela esteja depois da origem.
+                        idx_insercao = idx_original - 1 if origem_idx < idx_original else idx_original
+                        if 0 <= idx_insercao < len(dados_lojas_atual):
+                            dados_lojas_atual[idx_insercao] = novo_registro
+                        else:
+                            dados_lojas_atual.append(novo_registro)
+
+                        historico_atual.append({
+                            "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Usuário Responsável": usr_atual,
+                            "Loja Afetada": f"{loja_destino_num} - {loja_destino_ref}",
+                            "Colaborador": nome_novo,
+                            "Descrição da Mudança": f"Colaborador transferido de {origem_num} - {origem_ref} para {loja_destino_num} - {loja_destino_ref}.",
+                            "Observações": observacao_auto
+                        })
+                    else:
+                        dados_lojas_atual[idx_original] = novo_registro
+                        historico_atual.append({
+                            "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Usuário Responsável": usr_atual,
+                            "Loja Afetada": f"{loja_destino_num} - {loja_destino_ref}",
+                            "Colaborador": nome_novo,
+                            "Descrição da Mudança": "Cadastro de colaborador preenchido diretamente pela tabela.",
+                            "Observações": observacao_auto
+                        })
+
+                    alterou = True
+
+                if erros:
+                    for erro in erros:
+                        st.error(f"❌ {erro}")
+
+                if alterou and not erros:
+                    salvar_dados_lojas(dados_lojas_atual, historico_atual)
+                    st.success("✅ Registros vazios preenchidos e salvos com sucesso!")
+                    st.rerun()
+                elif alterou:
+                    salvar_dados_lojas(dados_lojas_atual, historico_atual)
+                    st.warning("⚠️ Alguns registros foram salvos e outros não puderam ser alterados.")
+                    st.rerun()
+        else:
+            st.info("Não há registros vazios disponíveis para preenchimento direto nesta loja/visão.")
 
     with tab_edit:
         st.subheader("📝 Adicionar ou Modificar Registro de Loja")
-        loja_opcoes = ["-- Nova Entrada --"] + list(df_lojas["REFERENCIA LOJA"].unique()) if not df_lojas.empty else ["-- Nova Entrada --"]
-        loja_sel = st.selectbox("Selecione uma Loja Existente para Editar ou Crie Uma Nova:", loja_opcoes)
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            num_loja = st.text_input("Nº Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
-            ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
-            uf = st.text_input("UF:", value="SP")
-            estado = st.text_input("Estado / Cidade:", value="SÃO PAULO")
-            nome = st.text_input("Nome do Colaborador:")
+        # Cadastro de uma nova loja: disponível para perfis administrativos/regionais.
+        # Gerentes e Líderes de Loja continuam limitados à própria loja e não podem criar lojas.
+        if perfil_usuario in ["Administrador", "Controladoria", "Regional 1", "Regional 2"]:
+            with st.expander("➕ Cadastrar nova loja", expanded=False):
+                st.caption("Cadastre primeiro a loja. Depois, os colaboradores podem ser preenchidos pela tabela de registros vazios.")
+                nova_col1, nova_col2, nova_col3 = st.columns(3)
+                with nova_col1:
+                    nova_num_loja = st.text_input("Nº da Loja *", key="nova_loja_num")
+                    nova_ref_loja = st.text_input("Referência da Loja *", key="nova_loja_ref")
+                with nova_col2:
+                    nova_uf = st.text_input("UF", value="SP", key="nova_loja_uf")
+                    nova_estado = st.text_input("Estado / Cidade", value="SÃO PAULO", key="nova_loja_estado")
+                with nova_col3:
+                    nova_setor = st.selectbox("Setor inicial", ["LOJA", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO"], key="nova_loja_setor")
 
-        with col2:
-            email = st.text_input("E-mail:")
-            telefone = st.text_input("Telefone / Celular:")
-            setor = st.selectbox("Setor:", ["LOJA", "COORDENADOR", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO", "OUTRO"])
-            cargo = st.text_input("Cargo:")
-            num_grupo = st.text_input("Nº do Grupo:")
+                if st.button("➕ Criar Nova Loja", type="primary", key="criar_nova_loja"):
+                    num_novo = str(nova_num_loja).strip().upper()
+                    ref_nova = str(nova_ref_loja).strip().upper()
 
-        with col3:
-            grupo = st.text_input("Grupo:")
-            sap_id = st.text_input("SAP ID:")
-            gmail_rec = st.text_input("Gmail Padrão Recebimento:")
-            observacoes = st.text_area("Observações de Atualização (Coluna 1):", value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')}")
+                    if not num_novo or not ref_nova:
+                        st.error("❌ Informe o Nº da Loja e a Referência da Loja.")
+                    else:
+                        loja_ja_existe = any(
+                            str(r.get("Nº LOJA", "")).strip().upper() == num_novo or
+                            str(r.get("REFERENCIA LOJA", "")).strip().upper() == ref_nova
+                            for r in dados_lojas
+                        )
 
-        if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
-            novo_registro = {
-                "Nº LOJA": num_loja,
-                "REFERENCIA LOJA": ref_loja,
-                "UF": uf,
-                "ESTADO": estado,
-                "NOME": nome,
-                "EMAIL": email,
-                "TELEFONE": telefone,
-                "SETOR": setor,
-                "CARGO": cargo,
-                "N DO GRUPO": num_grupo,
-                "GRUPO": grupo,
-                "SAP ID": sap_id,
-                "Gmail padrão Recebimento": gmail_rec,
-                "Coluna 1": observacoes
-            }
+                        if loja_ja_existe:
+                            st.error("❌ Essa loja já está cadastrada pelo Nº ou pela Referência.")
+                        else:
+                            usr_novo = st.session_state.get("usuario_atual", "Administrador")
+                            obs_nova = f"Loja criada em {datetime.datetime.now().strftime('%d/%m/%Y')} por {usr_novo}"
+                            novo_registro_loja = {
+                                "Nº LOJA": num_novo,
+                                "REFERENCIA LOJA": ref_nova,
+                                "UF": str(nova_uf).strip().upper(),
+                                "ESTADO": str(nova_estado).strip().upper(),
+                                "NOME": "",
+                                "EMAIL": "",
+                                "TELEFONE": "",
+                                "SETOR": nova_setor,
+                                "CARGO": "",
+                                "N DO GRUPO": "",
+                                "GRUPO": "",
+                                "Gmail padrão Recebimento": "",
+                                "Coluna 1": obs_nova
+                            }
+                            dados_lojas.append(novo_registro_loja)
+                            historico_mudancas.append({
+                                "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                "Usuário Responsável": usr_novo,
+                                "Loja Afetada": f"{num_novo} - {ref_nova}",
+                                "Colaborador": "",
+                                "Descrição da Mudança": "Nova loja cadastrada.",
+                                "Observações": obs_nova
+                            })
+                            salvar_dados_lojas(dados_lojas, historico_mudancas)
+                            st.success(f"✅ Loja {num_novo} - {ref_nova} criada com sucesso!")
+                            st.rerun()
 
-            dados_lojas.append(novo_registro)
+        # Gerentes e Líderes de Loja só podem trabalhar com a própria loja.
+        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+            lojas_permitidas_edit = [
+                x.strip().upper()
+                for x in str(loja_usuario).replace(" ", ",").split(",")
+                if x.strip()
+            ]
+            lojas_edit_df = df_lojas[
+                df_lojas["Nº LOJA"].astype(str).str.strip().str.upper().isin(lojas_permitidas_edit)
+            ].copy()
+            lojas_edit_df["_OPCAO"] = (
+                lojas_edit_df["Nº LOJA"].astype(str).str.strip() + " - " +
+                lojas_edit_df["REFERENCIA LOJA"].astype(str).str.strip()
+            )
+            loja_opcoes = list(dict.fromkeys(lojas_edit_df["_OPCAO"].tolist()))
+            if not loja_opcoes:
+                st.error("❌ Nenhuma loja está vinculada ao seu usuário.")
+                return
+            loja_sel = st.selectbox("Loja autorizada para edição:", loja_opcoes, disabled=True)
+            loja_num_autorizada, loja_ref_autorizada = [x.strip() for x in loja_sel.split(" - ", 1)]
+        else:
+            loja_opcoes = ["-- Nova Entrada --"] + list(df_lojas["REFERENCIA LOJA"].unique()) if not df_lojas.empty else ["-- Nova Entrada --"]
+            loja_sel = st.selectbox("Selecione uma Loja Existente para Editar ou Crie Uma Nova:", loja_opcoes)
+            loja_num_autorizada = "" if loja_sel == "-- Nova Entrada --" else loja_sel
+            loja_ref_autorizada = "" if loja_sel == "-- Nova Entrada --" else loja_sel
 
-            usr_atual = st.session_state.get("usuario_atual", "Administrador")
-            log_mudanca = {
-                "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                "Usuário Responsável": usr_atual,
-                "Loja Afetada": f"{num_loja} - {ref_loja}",
-                "Colaborador": nome,
-                "Descrição da Mudança": f"Cadastrado/Atualizado contato do setor {setor} ({cargo})."
-            }
-            historico_mudancas.append(log_mudanca)
+        # Ação: permite retirar um colaborador sem apagar a loja inteira.
+        acao = st.radio(
+            "Ação:",
+            ["Adicionar / Atualizar colaborador", "🚪 Retirar colaborador da loja"],
+            horizontal=True
+        )
 
-            salvar_dados_lojas(dados_lojas, historico_mudancas)
-            st.success("✅ Informações salvas com sucesso no banco de dados!")
-            st.rerun()
+        if acao == "🚪 Retirar colaborador da loja":
+            if loja_sel == "-- Nova Entrada --":
+                st.info("Selecione uma loja existente para retirar um colaborador.")
+            else:
+                registros_loja = df_lojas[
+                    df_lojas["REFERENCIA LOJA"].astype(str).str.strip() == str(loja_ref_autorizada).strip()
+                ].copy()
+                registros_loja = registros_loja[registros_loja["NOME"].fillna("").astype(str).str.strip() != ""]
+
+                if registros_loja.empty:
+                    st.info("Nenhum colaborador cadastrado nesta loja.")
+                else:
+                    registros_loja["_COLAB"] = (
+                        registros_loja["NOME"].astype(str).str.strip() +
+                        " — " + registros_loja["GRUPO"].fillna("").astype(str).str.strip()
+                    )
+                    colaborador_sel = st.selectbox(
+                        "Selecione o colaborador que saiu da loja:",
+                        registros_loja["_COLAB"].tolist()
+                    )
+                    idx_colaborador = registros_loja.index[registros_loja["_COLAB"] == colaborador_sel][0]
+                    observacao_saida = st.text_area(
+                        "Observações da saída *",
+                        placeholder="Ex.: Desligamento, transferência para outra loja, mudança de função..."
+                    )
+
+                    if st.button("🚪 Retirar Colaborador", type="primary"):
+                        if not observacao_saida.strip():
+                            st.error("❌ Informe uma observação para registrar a saída do colaborador.")
+                        else:
+                            colaborador = dados_lojas[idx_colaborador]
+                            nome_removido = str(colaborador.get("NOME", "")).strip()
+                            dados_lojas.pop(idx_colaborador)
+
+                            usr_atual = st.session_state.get("usuario_atual", "Administrador")
+                            historico_mudancas.append({
+                                "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                "Usuário Responsável": usr_atual,
+                                "Loja Afetada": f"{colaborador.get('Nº LOJA', '')} - {colaborador.get('REFERENCIA LOJA', '')}",
+                                "Colaborador": nome_removido,
+                                "Descrição da Mudança": "Colaborador retirado da loja.",
+                                "Observações": observacao_saida.strip()
+                            })
+                            salvar_dados_lojas(dados_lojas, historico_mudancas)
+                            st.success(f"✅ {nome_removido} foi retirado da loja e a saída foi registrada.")
+                            st.rerun()
+        else:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                    num_loja = st.text_input("Nº Loja:", value=loja_num_autorizada, disabled=True)
+                    ref_loja = st.text_input("Referência Loja:", value=loja_ref_autorizada, disabled=True)
+                else:
+                    num_loja = st.text_input("Nº Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+                    ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+                uf = st.text_input("UF:", value="SP")
+                estado = st.text_input("Estado / Cidade:", value="SÃO PAULO")
+                nome = st.text_input("Nome do Colaborador:")
+
+            with col2:
+                email = st.text_input("E-mail:")
+                telefone = st.text_input("Telefone / Celular:")
+                setor = st.selectbox("Setor:", ["LOJA", "COORDENADOR", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO", "OUTRO"])
+                cargo = st.text_input("Cargo:")
+
+                # O Nº do Grupo é vinculado automaticamente ao Grupo.
+                mapa_grupo_numero = {}
+                if not df_lojas.empty and "GRUPO" in df_lojas.columns and "N DO GRUPO" in df_lojas.columns:
+                    for _, registro_grupo in df_lojas[["GRUPO", "N DO GRUPO"]].dropna().iterrows():
+                        nome_grupo = str(registro_grupo["GRUPO"]).strip()
+                        numero_grupo = str(registro_grupo["N DO GRUPO"]).strip()
+                        if nome_grupo and numero_grupo and nome_grupo.lower() not in ["nan", "none"]:
+                            mapa_grupo_numero.setdefault(nome_grupo, numero_grupo)
+
+                grupos_disponiveis = sorted(mapa_grupo_numero.keys())
+                grupo_atual_registro = ""
+                if loja_sel != "-- Nova Entrada --" and not df_lojas.empty:
+                    registros_loja = df_lojas[df_lojas["REFERENCIA LOJA"].astype(str) == str(loja_ref_autorizada)]
+                    if not registros_loja.empty and "GRUPO" in registros_loja.columns:
+                        valores_grupo = registros_loja["GRUPO"].dropna().astype(str).str.strip()
+                        if not valores_grupo.empty:
+                            grupo_atual_registro = valores_grupo.iloc[0]
+
+                grupo_inicial = grupo_atual_registro if grupo_atual_registro in grupos_disponiveis else (grupos_disponiveis[0] if grupos_disponiveis else "")
+                grupo = st.selectbox("Grupo:", grupos_disponiveis, index=grupos_disponiveis.index(grupo_inicial) if grupo_inicial in grupos_disponiveis else 0, disabled=False) if grupos_disponiveis else st.text_input("Grupo:")
+                num_grupo = mapa_grupo_numero.get(grupo, "")
+                st.text_input("Nº do Grupo:", value=num_grupo, disabled=True)
+                gmail_rec = st.text_input(
+                    "Gmail Padrão Recebimento:",
+                    disabled=(perfil_usuario != "Administrador")
+                )
+                email_atualizacao = str(st.session_state.get("usuario_atual", "")).strip()
+                observacoes = st.text_area(
+                    "Observações:",
+                    value=f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')} por {email_atualizacao}",
+                    disabled=True
+                )
+
+            if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
+                if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                    lojas_permitidas_save = [
+                        x.strip().upper()
+                        for x in str(loja_usuario).replace(" ", ",").split(",")
+                        if x.strip()
+                    ]
+                    if str(num_loja).strip().upper() not in lojas_permitidas_save:
+                        st.error("❌ Você só pode alterar registros da sua própria loja.")
+                        return
+
+                novo_registro = {
+                    "Nº LOJA": num_loja,
+                    "REFERENCIA LOJA": ref_loja,
+                    "UF": uf,
+                    "ESTADO": estado,
+                    "NOME": nome,
+                    "EMAIL": email,
+                    "TELEFONE": telefone,
+                    "SETOR": setor,
+                    "CARGO": cargo,
+                    "N DO GRUPO": num_grupo,
+                    "GRUPO": grupo,
+                    "Gmail padrão Recebimento": gmail_rec,
+                    "Coluna 1": observacoes
+                }
+
+                # Se o colaborador já existir pelo nome, não cria duplicidade.
+                # Se estiver em outra loja, realiza a transferência automaticamente.
+                nome_normalizado = str(nome).strip().casefold()
+                indices_mesmo_nome = [
+                    i for i, registro in enumerate(dados_lojas)
+                    if nome_normalizado and str(registro.get("NOME", "")).strip().casefold() == nome_normalizado
+                ]
+
+                usr_atual = st.session_state.get("usuario_atual", "Administrador")
+                registro_existente = None
+                indice_existente = None
+
+                if indices_mesmo_nome:
+                    # Preferimos um registro já existente na loja de destino.
+                    for i in indices_mesmo_nome:
+                        if (str(dados_lojas[i].get("Nº LOJA", "")).strip().casefold() == str(num_loja).strip().casefold()
+                                or str(dados_lojas[i].get("REFERENCIA LOJA", "")).strip().casefold() == str(ref_loja).strip().casefold()):
+                            indice_existente = i
+                            registro_existente = dados_lojas[i]
+                            break
+
+                    # Caso não esteja na loja de destino, é uma transferência.
+                    if indice_existente is None:
+                        indice_existente = indices_mesmo_nome[0]
+                        registro_existente = dados_lojas[indice_existente]
+                        loja_origem_num = str(registro_existente.get("Nº LOJA", "")).strip()
+                        loja_origem_ref = str(registro_existente.get("REFERENCIA LOJA", "")).strip()
+                        loja_destino_num = str(num_loja).strip()
+                        loja_destino_ref = str(ref_loja).strip()
+
+                        # Gerente e Líder de Loja não podem retirar/transferir alguém de outra loja.
+                        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                            lojas_permitidas_transfer = [
+                                x.strip().upper()
+                                for x in str(loja_usuario).replace(" ", ",").split(",")
+                                if x.strip()
+                            ]
+                            if loja_origem_num.upper() not in lojas_permitidas_transfer:
+                                st.error("❌ Este colaborador está vinculado a outra loja. Apenas Administrador, Controladoria e Regionais podem realizar essa transferência.")
+                                return
+
+                        # Remove o registro da loja antiga antes de inserir na nova.
+                        dados_lojas.pop(indice_existente)
+                        novo_registro["Gmail padrão Recebimento"] = registro_existente.get("Gmail padrão Recebimento", "")
+                        dados_lojas.append(novo_registro)
+
+                        historico_mudancas.append({
+                            "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Usuário Responsável": usr_atual,
+                            "Loja Afetada": f"{loja_destino_num} - {loja_destino_ref}",
+                            "Colaborador": nome,
+                            "Descrição da Mudança": f"Colaborador transferido de {loja_origem_num} - {loja_origem_ref} para {loja_destino_num} - {loja_destino_ref}.",
+                            "Observações": observacoes
+                        })
+                        salvar_dados_lojas(dados_lojas, historico_mudancas)
+                        st.success(f"✅ {nome} foi transferido automaticamente de {loja_origem_num} - {loja_origem_ref} para {loja_destino_num} - {loja_destino_ref}.")
+                        st.rerun()
+
+                    # Se já estiver na mesma loja, atualiza o cadastro existente.
+                    else:
+                        dados_lojas[indice_existente] = novo_registro
+                        historico_mudancas.append({
+                            "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Usuário Responsável": usr_atual,
+                            "Loja Afetada": f"{num_loja} - {ref_loja}",
+                            "Colaborador": nome,
+                            "Descrição da Mudança": f"Cadastro do colaborador atualizado no setor {setor} ({cargo}).",
+                            "Observações": observacoes
+                        })
+                else:
+                    dados_lojas.append(novo_registro)
+                    historico_mudancas.append({
+                        "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        "Usuário Responsável": usr_atual,
+                        "Loja Afetada": f"{num_loja} - {ref_loja}",
+                        "Colaborador": nome,
+                        "Descrição da Mudança": f"Cadastrado contato do setor {setor} ({cargo}).",
+                        "Observações": observacoes
+                    })
+
+                salvar_dados_lojas(dados_lojas, historico_mudancas)
+                st.success("✅ Informações salvas com sucesso no banco de dados!")
+                st.rerun()
 
     with tab_logs:
         st.subheader("📜 Histórico e Registro de Mudanças")
         if historico_mudancas:
             df_logs = pd.DataFrame(historico_mudancas)
+            if "Observações" not in df_logs.columns:
+                df_logs["Observações"] = ""
             st.dataframe(df_logs, use_container_width=True)
         else:
             st.info("Nenhuma mudança registrada até o momento.")
@@ -2951,7 +3399,6 @@ def renderizar_dashboard():
         else:
             lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
             lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] or lojas_disponiveis
-            st.sidebar.info(f"📍 **Centro Vinculado:** {', '.join(lojas_sel)}")
 
         marcas_unicas = [str(x) for x in df['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
         marcas_sel = st.sidebar.multiselect("Marcas (Geral):", options=sorted(marcas_unicas), default=sorted(marcas_unicas))
@@ -2981,178 +3428,179 @@ def renderizar_dashboard():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # ANÁLISE DE PRODUTOS
-        st.subheader("🛍️ Análise de Produtos por Nível de Perda")
-        tab_unificado, tab_por_loja = st.tabs(["🌐 Unificado (Geral)", "🏬 Por Loja (Centro)"])
-        
-        df_perdas_prod = df_filtered[(df_filtered['Qtd_Limpa'] < 0) | (df_filtered['Valor_Limpo'] < 0)].copy()
-        
-        with tab_unificado:
-            with st.expander("🔍 Filtro Local: Produtos (Unificado)"):
-                col_fu1, col_fu2, col_fu3 = st.columns(3)
-                with col_fu1:
-                    m_unif_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_perdas_prod['Marca_Nome'].unique()), default=sorted(df_perdas_prod['Marca_Nome'].unique()), key="f_prod_unif_marca")
-                with col_fu2:
-                    mes_unif_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_perdas_prod['Mes_Ano'].unique()), default=sorted(df_perdas_prod['Mes_Ano'].unique()), key="f_prod_unif_mes")
-                with col_fu3:
-                    top_n_unif = st.slider("Selecione o Top (Produtos Unificado):", min_value=10, max_value=100, value=15, step=5, key="top_prod_unif")
-
-            df_perdas_unif_f = df_perdas_prod[
-                (df_perdas_prod['Marca_Nome'].isin(m_unif_sel)) &
-                (df_perdas_prod['Mes_Ano'].isin(mes_unif_sel))
-            ]
-
-            st.markdown("#### 🚨 Maiores Perdas de Produtos (Unificado)")
-            col_unif_qtd, col_unif_val = st.columns(2)
+        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
+            # ANÁLISE DE PRODUTOS
+            st.subheader("🛍️ Análise de Produtos por Nível de Perda")
+            tab_unificado, tab_por_loja = st.tabs(["🌐 Unificado (Geral)", "🏬 Por Loja (Centro)"])
             
-            with col_unif_qtd:
-                st.markdown(f"##### 📦 Top {top_n_unif} MAIORES por Quantidade (UN)")
-                df_prod_qtd_unif = (
-                    df_perdas_unif_f[df_perdas_unif_f['Qtd_Limpa'] < 0]
-                    .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
-                    .sum().abs().reset_index()
-                    .sort_values(by='Qtd_Limpa', ascending=False)
-                )
-                df_prod_qtd_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_unif))])
-                df_top_qtd_unif = df_prod_qtd_unif.head(top_n_unif).copy()
-                df_top_qtd_unif['Qtd_Limpa'] = df_top_qtd_unif['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                df_top_qtd_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade Perdida'}, inplace=True)
-                st.dataframe(df_top_qtd_unif, use_container_width=True, hide_index=True)
-
-            with col_unif_val:
-                st.markdown(f"##### 💰 Top {top_n_unif} MAIORES por Valor (R$)")
-                df_prod_val_unif = (
-                    df_perdas_unif_f[df_perdas_unif_f['Valor_Limpo'] < 0]
-                    .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
-                    .sum().abs().reset_index()
-                    .sort_values(by='Valor_Limpo', ascending=False)
-                )
-                df_prod_val_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_unif))])
-                df_top_val_unif = df_prod_val_unif.head(top_n_unif).copy()
-                df_top_val_unif['Valor_Limpo'] = df_top_val_unif['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
-                df_top_val_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor Perdido'}, inplace=True)
-                st.dataframe(df_top_val_unif, use_container_width=True, hide_index=True)
-
-            st.markdown("---")
-            st.markdown("#### ✅ Menores Perdas de Produtos (Unificado)")
-            col_unif_qtd_min, col_unif_val_min = st.columns(2)
-
-            with col_unif_qtd_min:
-                st.markdown(f"##### 📦 Top {top_n_unif} MENORES por Quantidade (UN)")
-                df_prod_qtd_unif_min = (
-                    df_perdas_unif_f[df_perdas_unif_f['Qtd_Limpa'] < 0]
-                    .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
-                    .sum().abs().reset_index()
-                    .sort_values(by='Qtd_Limpa', ascending=True)
-                )
-                df_prod_qtd_unif_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_unif_min))])
-                df_min_qtd_unif = df_prod_qtd_unif_min.head(top_n_unif).copy()
-                df_min_qtd_unif['Qtd_Limpa'] = df_min_qtd_unif['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                df_min_qtd_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade Perdida'}, inplace=True)
-                st.dataframe(df_min_qtd_unif, use_container_width=True, hide_index=True)
-
-            with col_unif_val_min:
-                st.markdown(f"##### 💰 Top {top_n_unif} MENORES por Valor (R$)")
-                df_prod_val_unif_min = (
-                    df_perdas_unif_f[df_perdas_unif_f['Valor_Limpo'] < 0]
-                    .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
-                    .sum().abs().reset_index()
-                    .sort_values(by='Valor_Limpo', ascending=True)
-                )
-                df_prod_val_unif_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_unif_min))])
-                df_min_val_unif = df_prod_val_unif_min.head(top_n_unif).copy()
-                df_min_val_unif['Valor_Limpo'] = df_min_val_unif['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
-                df_min_val_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor Perdido'}, inplace=True)
-                st.dataframe(df_min_val_unif, use_container_width=True, hide_index=True)
-
-        with tab_por_loja:
-            lojas_existentes = sorted([x for x in df_perdas_prod['Loja_Nome'].unique() if x])
-            if lojas_existentes:
-                centro_selecionado = st.selectbox("Selecione o Centro (Loja):", options=lojas_existentes, key="f_prod_loja_centro")
-                
-                with st.expander("🔍 Filtro Local: Marcas, Meses e Top N da Loja Selecionada"):
-                    col_fl1, col_fl2, col_fl3 = st.columns(3)
-                    with col_fl1:
-                        marcas_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Marca_Nome'].unique())
-                        m_loja_sel = st.multiselect("Filtrar Marcas:", options=marcas_loja_opts, default=marcas_loja_opts, key="f_prod_loja_marca")
-                    with col_fl2:
-                        meses_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Mes_Ano'].unique())
-                        mes_loja_sel = st.multiselect("Filtrar Mês/Ano:", options=meses_loja_opts, default=meses_loja_opts, key="f_prod_loja_mes")
-                    with col_fl3:
-                        top_n_loja = st.slider("Selecione o Top (Produtos por Loja):", min_value=10, max_value=100, value=10, step=5, key="top_prod_loja")
-
-                df_loja_prod = df_perdas_prod[
-                    (df_perdas_prod['Loja_Nome'] == centro_selecionado) &
-                    (df_perdas_prod['Marca_Nome'].isin(m_loja_sel)) &
-                    (df_perdas_prod['Mes_Ano'].isin(mes_loja_sel))
+            df_perdas_prod = df_filtered[(df_filtered['Qtd_Limpa'] < 0) | (df_filtered['Valor_Limpo'] < 0)].copy()
+            
+            with tab_unificado:
+                with st.expander("🔍 Filtro Local: Produtos (Unificado)"):
+                    col_fu1, col_fu2, col_fu3 = st.columns(3)
+                    with col_fu1:
+                        m_unif_sel = st.multiselect("Filtrar Marcas:", options=sorted(df_perdas_prod['Marca_Nome'].unique()), default=sorted(df_perdas_prod['Marca_Nome'].unique()), key="f_prod_unif_marca")
+                    with col_fu2:
+                        mes_unif_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_perdas_prod['Mes_Ano'].unique()), default=sorted(df_perdas_prod['Mes_Ano'].unique()), key="f_prod_unif_mes")
+                    with col_fu3:
+                        top_n_unif = st.slider("Selecione o Top (Produtos Unificado):", min_value=10, max_value=100, value=15, step=5, key="top_prod_unif")
+    
+                df_perdas_unif_f = df_perdas_prod[
+                    (df_perdas_prod['Marca_Nome'].isin(m_unif_sel)) &
+                    (df_perdas_prod['Mes_Ano'].isin(mes_unif_sel))
                 ]
+    
+                st.markdown("#### 🚨 Maiores Perdas de Produtos (Unificado)")
+                col_unif_qtd, col_unif_val = st.columns(2)
                 
-                st.markdown(f"#### 🚨 Maiores Perdas em `{centro_selecionado}`")
-                col_loja_qtd, col_loja_val = st.columns(2)
-                
-                with col_loja_qtd:
-                    st.markdown(f"##### 📦 Top {top_n_loja} MAIORES por Qtd em `{centro_selecionado}`")
-                    df_prod_qtd_loja = (
-                        df_loja_prod[df_loja_prod['Qtd_Limpa'] < 0]
+                with col_unif_qtd:
+                    st.markdown(f"##### 📦 Top {top_n_unif} MAIORES por Quantidade (UN)")
+                    df_prod_qtd_unif = (
+                        df_perdas_unif_f[df_perdas_unif_f['Qtd_Limpa'] < 0]
                         .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
                         .sum().abs().reset_index()
                         .sort_values(by='Qtd_Limpa', ascending=False)
                     )
-                    df_prod_qtd_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_loja))])
-                    df_top_qtd_loja = df_prod_qtd_loja.head(top_n_loja).copy()
-                    df_top_qtd_loja['Qtd_Limpa'] = df_top_qtd_loja['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                    df_top_qtd_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade'}, inplace=True)
-                    st.dataframe(df_top_qtd_loja, use_container_width=True, hide_index=True)
-
-                with col_loja_val:
-                    st.markdown(f"##### 💰 Top {top_n_loja} MAIORES por Valor em `{centro_selecionado}`")
-                    df_prod_val_loja = (
-                        df_loja_prod[df_loja_prod['Valor_Limpo'] < 0]
+                    df_prod_qtd_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_unif))])
+                    df_top_qtd_unif = df_prod_qtd_unif.head(top_n_unif).copy()
+                    df_top_qtd_unif['Qtd_Limpa'] = df_top_qtd_unif['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                    df_top_qtd_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade Perdida'}, inplace=True)
+                    st.dataframe(df_top_qtd_unif, use_container_width=True, hide_index=True)
+    
+                with col_unif_val:
+                    st.markdown(f"##### 💰 Top {top_n_unif} MAIORES por Valor (R$)")
+                    df_prod_val_unif = (
+                        df_perdas_unif_f[df_perdas_unif_f['Valor_Limpo'] < 0]
                         .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
                         .sum().abs().reset_index()
                         .sort_values(by='Valor_Limpo', ascending=False)
                     )
-                    df_prod_val_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_loja))])
-                    df_top_val_loja = df_prod_val_loja.head(top_n_loja).copy()
-                    df_top_val_loja['Valor_Limpo'] = df_top_val_loja['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
-                    df_top_val_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor'}, inplace=True)
-                    st.dataframe(df_top_val_loja, use_container_width=True, hide_index=True)
-
+                    df_prod_val_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_unif))])
+                    df_top_val_unif = df_prod_val_unif.head(top_n_unif).copy()
+                    df_top_val_unif['Valor_Limpo'] = df_top_val_unif['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
+                    df_top_val_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor Perdido'}, inplace=True)
+                    st.dataframe(df_top_val_unif, use_container_width=True, hide_index=True)
+    
                 st.markdown("---")
-                st.markdown(f"#### ✅ Menores Perdas em `{centro_selecionado}`")
-                col_loja_qtd_min, col_loja_val_min = st.columns(2)
-
-                with col_loja_qtd_min:
-                    st.markdown(f"##### 📦 Top {top_n_loja} MENORES por Qtd em `{centro_selecionado}`")
-                    df_prod_qtd_loja_min = (
-                        df_loja_prod[df_loja_prod['Qtd_Limpa'] < 0]
+                st.markdown("#### ✅ Menores Perdas de Produtos (Unificado)")
+                col_unif_qtd_min, col_unif_val_min = st.columns(2)
+    
+                with col_unif_qtd_min:
+                    st.markdown(f"##### 📦 Top {top_n_unif} MENORES por Quantidade (UN)")
+                    df_prod_qtd_unif_min = (
+                        df_perdas_unif_f[df_perdas_unif_f['Qtd_Limpa'] < 0]
                         .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
                         .sum().abs().reset_index()
                         .sort_values(by='Qtd_Limpa', ascending=True)
                     )
-                    df_prod_qtd_loja_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_loja_min))])
-                    df_min_qtd_loja = df_prod_qtd_loja_min.head(top_n_loja).copy()
-                    df_min_qtd_loja['Qtd_Limpa'] = df_min_qtd_loja['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                    df_min_qtd_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade'}, inplace=True)
-                    st.dataframe(df_min_qtd_loja, use_container_width=True, hide_index=True)
-
-                with col_loja_val_min:
-                    st.markdown(f"##### 💰 Top {top_n_loja} MENORES por Valor em `{centro_selecionado}`")
-                    df_prod_val_loja_min = (
-                        df_loja_prod[df_loja_prod['Valor_Limpo'] < 0]
+                    df_prod_qtd_unif_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_unif_min))])
+                    df_min_qtd_unif = df_prod_qtd_unif_min.head(top_n_unif).copy()
+                    df_min_qtd_unif['Qtd_Limpa'] = df_min_qtd_unif['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                    df_min_qtd_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade Perdida'}, inplace=True)
+                    st.dataframe(df_min_qtd_unif, use_container_width=True, hide_index=True)
+    
+                with col_unif_val_min:
+                    st.markdown(f"##### 💰 Top {top_n_unif} MENORES por Valor (R$)")
+                    df_prod_val_unif_min = (
+                        df_perdas_unif_f[df_perdas_unif_f['Valor_Limpo'] < 0]
                         .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
                         .sum().abs().reset_index()
                         .sort_values(by='Valor_Limpo', ascending=True)
                     )
-                    df_prod_val_loja_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_loja_min))])
-                    df_min_val_loja = df_prod_val_loja_min.head(top_n_loja).copy()
-                    df_min_val_loja['Valor_Limpo'] = df_min_val_loja['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
-                    df_min_val_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor'}, inplace=True)
-                    st.dataframe(df_min_val_loja, use_container_width=True, hide_index=True)
-            else:
-                st.info("Nenhum registro de perda encontrado para os filtros selecionados.")
-
-        st.markdown("<br>", unsafe_allow_html=True)
+                    df_prod_val_unif_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_unif_min))])
+                    df_min_val_unif = df_prod_val_unif_min.head(top_n_unif).copy()
+                    df_min_val_unif['Valor_Limpo'] = df_min_val_unif['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
+                    df_min_val_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor Perdido'}, inplace=True)
+                    st.dataframe(df_min_val_unif, use_container_width=True, hide_index=True)
+    
+            with tab_por_loja:
+                lojas_existentes = sorted([x for x in df_perdas_prod['Loja_Nome'].unique() if x])
+                if lojas_existentes:
+                    centro_selecionado = st.selectbox("Selecione o Centro (Loja):", options=lojas_existentes, key="f_prod_loja_centro")
+                    
+                    with st.expander("🔍 Filtro Local: Marcas, Meses e Top N da Loja Selecionada"):
+                        col_fl1, col_fl2, col_fl3 = st.columns(3)
+                        with col_fl1:
+                            marcas_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Marca_Nome'].unique())
+                            m_loja_sel = st.multiselect("Filtrar Marcas:", options=marcas_loja_opts, default=marcas_loja_opts, key="f_prod_loja_marca")
+                        with col_fl2:
+                            meses_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Mes_Ano'].unique())
+                            mes_loja_sel = st.multiselect("Filtrar Mês/Ano:", options=meses_loja_opts, default=meses_loja_opts, key="f_prod_loja_mes")
+                        with col_fl3:
+                            top_n_loja = st.slider("Selecione o Top (Produtos por Loja):", min_value=10, max_value=100, value=10, step=5, key="top_prod_loja")
+    
+                    df_loja_prod = df_perdas_prod[
+                        (df_perdas_prod['Loja_Nome'] == centro_selecionado) &
+                        (df_perdas_prod['Marca_Nome'].isin(m_loja_sel)) &
+                        (df_perdas_prod['Mes_Ano'].isin(mes_loja_sel))
+                    ]
+                    
+                    st.markdown(f"#### 🚨 Maiores Perdas em `{centro_selecionado}`")
+                    col_loja_qtd, col_loja_val = st.columns(2)
+                    
+                    with col_loja_qtd:
+                        st.markdown(f"##### 📦 Top {top_n_loja} MAIORES por Qtd em `{centro_selecionado}`")
+                        df_prod_qtd_loja = (
+                            df_loja_prod[df_loja_prod['Qtd_Limpa'] < 0]
+                            .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
+                            .sum().abs().reset_index()
+                            .sort_values(by='Qtd_Limpa', ascending=False)
+                        )
+                        df_prod_qtd_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_loja))])
+                        df_top_qtd_loja = df_prod_qtd_loja.head(top_n_loja).copy()
+                        df_top_qtd_loja['Qtd_Limpa'] = df_top_qtd_loja['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                        df_top_qtd_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade'}, inplace=True)
+                        st.dataframe(df_top_qtd_loja, use_container_width=True, hide_index=True)
+    
+                    with col_loja_val:
+                        st.markdown(f"##### 💰 Top {top_n_loja} MAIORES por Valor em `{centro_selecionado}`")
+                        df_prod_val_loja = (
+                            df_loja_prod[df_loja_prod['Valor_Limpo'] < 0]
+                            .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
+                            .sum().abs().reset_index()
+                            .sort_values(by='Valor_Limpo', ascending=False)
+                        )
+                        df_prod_val_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_loja))])
+                        df_top_val_loja = df_prod_val_loja.head(top_n_loja).copy()
+                        df_top_val_loja['Valor_Limpo'] = df_top_val_loja['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
+                        df_top_val_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor'}, inplace=True)
+                        st.dataframe(df_top_val_loja, use_container_width=True, hide_index=True)
+    
+                    st.markdown("---")
+                    st.markdown(f"#### ✅ Menores Perdas em `{centro_selecionado}`")
+                    col_loja_qtd_min, col_loja_val_min = st.columns(2)
+    
+                    with col_loja_qtd_min:
+                        st.markdown(f"##### 📦 Top {top_n_loja} MENORES por Qtd em `{centro_selecionado}`")
+                        df_prod_qtd_loja_min = (
+                            df_loja_prod[df_loja_prod['Qtd_Limpa'] < 0]
+                            .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
+                            .sum().abs().reset_index()
+                            .sort_values(by='Qtd_Limpa', ascending=True)
+                        )
+                        df_prod_qtd_loja_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_loja_min))])
+                        df_min_qtd_loja = df_prod_qtd_loja_min.head(top_n_loja).copy()
+                        df_min_qtd_loja['Qtd_Limpa'] = df_min_qtd_loja['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
+                        df_min_qtd_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade'}, inplace=True)
+                        st.dataframe(df_min_qtd_loja, use_container_width=True, hide_index=True)
+    
+                    with col_loja_val_min:
+                        st.markdown(f"##### 💰 Top {top_n_loja} MENORES por Valor em `{centro_selecionado}`")
+                        df_prod_val_loja_min = (
+                            df_loja_prod[df_loja_prod['Valor_Limpo'] < 0]
+                            .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
+                            .sum().abs().reset_index()
+                            .sort_values(by='Valor_Limpo', ascending=True)
+                        )
+                        df_prod_val_loja_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_loja_min))])
+                        df_min_val_loja = df_prod_val_loja_min.head(top_n_loja).copy()
+                        df_min_val_loja['Valor_Limpo'] = df_min_val_loja['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
+                        df_min_val_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor'}, inplace=True)
+                        st.dataframe(df_min_val_loja, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Nenhum registro de perda encontrado para os filtros selecionados.")
+    
+            st.markdown("<br>", unsafe_allow_html=True)
 
         # COMPARATIVO REGIONAL
         if perfil_usuario in ["Administrador", "Controladoria"]:
@@ -3320,15 +3768,25 @@ def renderizar_dashboard():
         st.subheader("🏷️ Análise e Ranking por Marca")
 
         with st.expander("🔍 Filtro Local: Perdas por Marca"):
-            col_fm1, col_fm2, col_fm3, col_fm4 = st.columns(4)
-            with col_fm1:
-                m_marcas_sel = st.multiselect("Filtrar Marcas Específicas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_marca_marcas")
-            with col_fm2:
-                m_centros_sel = st.multiselect("Filtrar Centros/Lojas:", options=sorted(df_filtered['Loja_Nome'].unique()), default=sorted(df_filtered['Loja_Nome'].unique()), key="f_marca_centros")
-            with col_fm3:
-                m_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_marca_meses")
-            with col_fm4:
-                top_n_marcas = st.slider("Selecione o Top (Marcas):", min_value=10, max_value=100, value=10, step=5, key="top_marcas")
+            if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                col_fm1, col_fm2, col_fm3 = st.columns(3)
+                with col_fm1:
+                    m_marcas_sel = st.multiselect("Filtrar Marcas Específicas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_marca_marcas")
+                with col_fm2:
+                    m_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_marca_meses")
+                with col_fm3:
+                    top_n_marcas = st.slider("Selecione o Top (Marcas):", min_value=10, max_value=100, value=10, step=5, key="top_marcas")
+                m_centros_sel = sorted(df_filtered['Loja_Nome'].unique())
+            else:
+                col_fm1, col_fm2, col_fm3, col_fm4 = st.columns(4)
+                with col_fm1:
+                    m_marcas_sel = st.multiselect("Filtrar Marcas Específicas:", options=sorted(df_filtered['Marca_Nome'].unique()), default=sorted(df_filtered['Marca_Nome'].unique()), key="f_marca_marcas")
+                with col_fm2:
+                    m_centros_sel = st.multiselect("Filtrar Centros/Lojas:", options=sorted(df_filtered['Loja_Nome'].unique()), default=sorted(df_filtered['Loja_Nome'].unique()), key="f_marca_centros")
+                with col_fm3:
+                    m_meses_sel = st.multiselect("Filtrar Mês/Ano:", options=sorted(df_filtered['Mes_Ano'].unique()), default=sorted(df_filtered['Mes_Ano'].unique()), key="f_marca_meses")
+                with col_fm4:
+                    top_n_marcas = st.slider("Selecione o Top (Marcas):", min_value=10, max_value=100, value=10, step=5, key="top_marcas")
 
         df_marcas_local = df_filtered[
             (df_filtered['Marca_Nome'].isin(m_marcas_sel)) &
