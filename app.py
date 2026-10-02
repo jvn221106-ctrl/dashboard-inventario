@@ -2834,6 +2834,67 @@ def renderizar_aba_gestao_lojas():
     with tab_edit:
         st.subheader("📝 Adicionar ou Modificar Registro de Loja")
 
+        # Cadastro de uma nova loja: disponível para perfis administrativos/regionais.
+        # Gerentes e Líderes de Loja continuam limitados à própria loja e não podem criar lojas.
+        if perfil_usuario in ["Administrador", "Controladoria", "Regional 1", "Regional 2"]:
+            with st.expander("➕ Cadastrar nova loja", expanded=False):
+                st.caption("Cadastre primeiro a loja. Depois, os colaboradores podem ser preenchidos pela tabela de registros vazios.")
+                nova_col1, nova_col2, nova_col3 = st.columns(3)
+                with nova_col1:
+                    nova_num_loja = st.text_input("Nº da Loja *", key="nova_loja_num")
+                    nova_ref_loja = st.text_input("Referência da Loja *", key="nova_loja_ref")
+                with nova_col2:
+                    nova_uf = st.text_input("UF", value="SP", key="nova_loja_uf")
+                    nova_estado = st.text_input("Estado / Cidade", value="SÃO PAULO", key="nova_loja_estado")
+                with nova_col3:
+                    nova_setor = st.selectbox("Setor inicial", ["LOJA", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO"], key="nova_loja_setor")
+
+                if st.button("➕ Criar Nova Loja", type="primary", key="criar_nova_loja"):
+                    num_novo = str(nova_num_loja).strip().upper()
+                    ref_nova = str(nova_ref_loja).strip().upper()
+
+                    if not num_novo or not ref_nova:
+                        st.error("❌ Informe o Nº da Loja e a Referência da Loja.")
+                    else:
+                        loja_ja_existe = any(
+                            str(r.get("Nº LOJA", "")).strip().upper() == num_novo or
+                            str(r.get("REFERENCIA LOJA", "")).strip().upper() == ref_nova
+                            for r in dados_lojas
+                        )
+
+                        if loja_ja_existe:
+                            st.error("❌ Essa loja já está cadastrada pelo Nº ou pela Referência.")
+                        else:
+                            usr_novo = st.session_state.get("usuario_atual", "Administrador")
+                            obs_nova = f"Loja criada em {datetime.datetime.now().strftime('%d/%m/%Y')} por {usr_novo}"
+                            novo_registro_loja = {
+                                "Nº LOJA": num_novo,
+                                "REFERENCIA LOJA": ref_nova,
+                                "UF": str(nova_uf).strip().upper(),
+                                "ESTADO": str(nova_estado).strip().upper(),
+                                "NOME": "",
+                                "EMAIL": "",
+                                "TELEFONE": "",
+                                "SETOR": nova_setor,
+                                "CARGO": "",
+                                "N DO GRUPO": "",
+                                "GRUPO": "",
+                                "Gmail padrão Recebimento": "",
+                                "Coluna 1": obs_nova
+                            }
+                            dados_lojas.append(novo_registro_loja)
+                            historico_mudancas.append({
+                                "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                "Usuário Responsável": usr_novo,
+                                "Loja Afetada": f"{num_novo} - {ref_nova}",
+                                "Colaborador": "",
+                                "Descrição da Mudança": "Nova loja cadastrada.",
+                                "Observações": obs_nova
+                            })
+                            salvar_dados_lojas(dados_lojas, historico_mudancas)
+                            st.success(f"✅ Loja {num_novo} - {ref_nova} criada com sucesso!")
+                            st.rerun()
+
         # Gerentes e Líderes de Loja só podem trabalhar com a própria loja.
         if perfil_usuario in ["Gerente", "Líder de Loja"]:
             lojas_permitidas_edit = [
