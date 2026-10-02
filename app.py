@@ -4209,7 +4209,7 @@ def renderizar_dashboard():
 
         mensal_exec = _agregar_resultado_mensal(df_filtered)
         if not mensal_exec.empty:
-            st.markdown("#### 📈 Diferença Mensal")
+            st.markdown("#### 📈 Evolução Mensal")
             fig_evolucao = px.line(
                 mensal_exec,
                 x='Mes_Ano',
@@ -4230,9 +4230,9 @@ def renderizar_dashboard():
                 st.markdown(f"#### 🔄 Comparativo: {mes_anterior} × {mes_atual}")
                 cp1, cp2, cp3, cp4 = st.columns(4)
                 cp1.metric(f"Perda R$ — {mes_anterior}", formatar_moeda(anterior['valor']))
-                cp2.metric(f"Perda R$ — {mes_atual}", formatar_moeda(atual['valor']), _formatar_variacao(var_rs))
+                cp2.metric(f"Perda R$ — {mes_atual}", formatar_moeda(atual['valor']), _formatar_variacao(var_rs), delta_color="inverse")
                 cp3.metric(f"Perda Qtd — {mes_anterior}", formatar_qtd(anterior['qtd']))
-                cp4.metric(f"Perda Qtd — {mes_atual}", formatar_qtd(atual['qtd']), _formatar_variacao(var_qtd))
+                cp4.metric(f"Perda Qtd — {mes_atual}", formatar_qtd(atual['qtd']), _formatar_variacao(var_qtd), delta_color="inverse")
 
         # Alertas gerenciais: somente fatos calculados sobre a visão atualmente filtrada.
         st.markdown("#### 🚨 Alertas Gerenciais")
