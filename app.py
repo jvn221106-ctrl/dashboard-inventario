@@ -2719,7 +2719,7 @@ def renderizar_aba_gestao_lojas():
             key="editor_tabela_consolidada",
             use_container_width=True,
             hide_index=False,
-            disabled=(["🗑️ Excluir"] if pode_excluir_linhas else []) + colunas_bloqueadas_tabela,
+            disabled=colunas_bloqueadas_tabela,
             column_config=config_tabela,
             num_rows="fixed"
         )
