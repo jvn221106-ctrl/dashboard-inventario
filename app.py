@@ -3959,7 +3959,9 @@ def renderizar_dashboard():
                 default=lojas_disponiveis,
                 key="filtro_lojas_geral"
             )
-        elif perfil_usuario in ["Regional 1", "Regional 2"]:
+        elif perfil_usuario in ["Regional 1", "Regional 2", "Gerente de produtos 1", "Gerente de produtos 2"]:
+            # Gerentes de Produtos também podem filtrar por loja, respeitando
+            # as lojas da regional à qual o perfil está vinculado.
             lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
             lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] if lojas_permitidas_usr else lojas_disponiveis
             if selecionar_todos:
