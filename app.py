@@ -3155,7 +3155,7 @@ def renderizar_aba_gestao_lojas():
                         placeholder="B001",
                         help="Digite somente o código da loja: B001, B002, B010..."
                     )
-                    ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+                    ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_ref_autorizada)
                 uf = st.text_input("UF:", value="SP")
                 estado = st.text_input("Estado / Cidade:", value="SÃO PAULO")
                 nome = st.text_input("Nome do Colaborador:")
