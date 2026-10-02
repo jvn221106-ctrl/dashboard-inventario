@@ -4209,7 +4209,7 @@ def renderizar_dashboard():
 
         mensal_exec = _agregar_resultado_mensal(df_filtered)
         if not mensal_exec.empty:
-            st.markdown("#### 📈 Evolução Mensal")
+            st.markdown("#### 📈 Diferença Mensal")
             fig_evolucao = px.line(
                 mensal_exec,
                 x='Mes_Ano',
