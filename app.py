@@ -4177,8 +4177,6 @@ def renderizar_dashboard():
                     )
                 st.caption(f"Arquivo completo: {len(df_ano_export):,} registros | Visão filtrada: {len(df_filtrado_export):,} registros.".replace(',', '.'))
 
-                fig_marca_rs.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_tickangle=-45)
-                st.plotly_chart(fig_marca_rs, use_container_width=True)
 
     except requests.exceptions.HTTPError as http_err:
         st.error(f"⚠️ Erro HTTP ao baixar do SharePoint ({http_err.response.status_code}). Verifique as permissões do link.")
