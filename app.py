@@ -58,7 +58,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josue_pereira_vonnycosmeticos_onmicrosoft_com/IQDIwoxviZ1ATqfdiOIXLRwhATjv6blCPwkh7cV6y8XE_cM?download=1"
+URL_EXCEL_NUVEM = "https://vonnycosmeticos-my.sharepoint.com/:x:/g/personal/josue_pereira_vonnycosmeticos_onmicrosoft_com/IQBPk7RDywHuR53pgILohLKbARZ0TkXuAjeJEfuUpfNehRM?download=1"
 
 DB_FILE = "usuarios_db.json"
 LOJAS_DB_FILE = "lojas_contatos_db.json"
@@ -2504,8 +2504,10 @@ def load_data():
     if col_data:
         df['Data_dt'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
         df['Mes_Ano'] = df['Data_dt'].dt.strftime('%m/%Y').fillna('Sem Data')
+        df['Ano'] = df['Data_dt'].dt.year.astype('Int64')
     else:
         df['Mes_Ano'] = 'Sem Data'
+        df['Ano'] = pd.Series(pd.NA, index=df.index, dtype='Int64')
 
     df = df[(df['Loja_Nome'] != 'S/ Centro') & (df['Marca_Nome'] != 'Sem Marca')].copy()
 
@@ -3557,6 +3559,75 @@ def renderizar_aba_gestao_lojas():
                 st.caption("A restauração do histórico está disponível apenas para Administrador e Controladoria.")
 
         st.markdown("---")
+
+        # Arquivo anual: permite guardar uma cópia separada do histórico por ano.
+        if perfil_usuario in ["Administrador", "Controladoria"]:
+            st.subheader("🗂️ Arquivo Anual")
+            st.caption("Selecione o ano para gerar um arquivo Excel separado somente com as mudanças daquele ano.")
+
+            anos_historico = set()
+            for registro in historico_mudancas:
+                data_hora = str(registro.get("Data/Hora", "")).strip()
+                try:
+                    ano_registro = int(data_hora[-4:]) if len(data_hora) >= 4 else None
+                    if ano_registro and 2000 <= ano_registro <= 2100:
+                        anos_historico.add(ano_registro)
+                except (ValueError, TypeError):
+                    pass
+            anos_historico.add(datetime.datetime.now().year)
+            anos_disponiveis = sorted(anos_historico, reverse=True)
+
+            col_ano, col_btn = st.columns([1, 2])
+            with col_ano:
+                ano_arquivo = st.selectbox(
+                    "Ano do arquivo:",
+                    options=anos_disponiveis,
+                    key="ano_arquivo_anual"
+                )
+
+            df_anual = pd.DataFrame(historico_mudancas) if historico_mudancas else pd.DataFrame()
+            if not df_anual.empty:
+                if "Data/Hora" in df_anual.columns:
+                    datas_anual = pd.to_datetime(
+                        df_anual["Data/Hora"],
+                        format="%d/%m/%Y %H:%M:%S",
+                        errors="coerce"
+                    )
+                    df_anual = df_anual[datas_anual.dt.year == int(ano_arquivo)].copy()
+                else:
+                    df_anual = df_anual.iloc[0:0].copy()
+
+            if df_anual.empty:
+                df_anual = pd.DataFrame(columns=[
+                    "Data/Hora",
+                    "Usuário Responsável",
+                    "Loja Afetada",
+                    "Colaborador",
+                    "Descrição da Mudança",
+                    "Observações"
+                ])
+
+            output_anual = io.BytesIO()
+            with pd.ExcelWriter(output_anual, engine="openpyxl") as writer:
+                df_anual.to_excel(
+                    writer,
+                    index=False,
+                    sheet_name=f"Historico_{ano_arquivo}"
+                )
+
+            with col_btn:
+                st.write("##")
+                st.download_button(
+                    label=f"📥 Salvar arquivo do ano {ano_arquivo}",
+                    data=output_anual.getvalue(),
+                    file_name=f"historico_mudancas_{ano_arquivo}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                    key="download_historico_anual"
+                )
+                st.caption(f"{len(df_anual)} registro(s) de mudança encontrado(s) para {ano_arquivo}.")
+
+        st.markdown("---")
         if historico_mudancas:
             df_logs = pd.DataFrame(historico_mudancas)
             if "Observações" not in df_logs.columns:
@@ -3824,17 +3895,43 @@ def renderizar_dashboard():
             return st.multiselect(label, options=options, default=options, key=key)
 
 
-        meses_unicos = sorted([x for x in df['Mes_Ano'].unique() if x != 'Sem Data'])
+        # Ano do Dashboard: permite separar a visualização por exercício/ano.
+        anos_disponiveis = sorted(
+            [int(x) for x in df['Ano'].dropna().unique()],
+            reverse=True
+        )
+        if anos_disponiveis:
+            ano_padrao = st.session_state.get("ano_dashboard", anos_disponiveis[0])
+            if ano_padrao not in anos_disponiveis:
+                ano_padrao = anos_disponiveis[0]
+            ano_dashboard = st.sidebar.selectbox(
+                "📅 Ano do Dashboard:",
+                options=anos_disponiveis,
+                index=anos_disponiveis.index(ano_padrao),
+                key="ano_dashboard",
+                help="Escolha o ano para visualizar e salvar o Dashboard separadamente."
+            )
+        else:
+            ano_dashboard = None
+            st.sidebar.info("Não há ano disponível na base de inventário.")
+
+        df_ano = df.copy()
+        if ano_dashboard is not None:
+            df_ano = df_ano[df_ano['Ano'] == ano_dashboard].copy()
+
+        meses_unicos = sorted([x for x in df_ano['Mes_Ano'].unique() if x != 'Sem Data'])
         if selecionar_todos:
             st.session_state["filtro_meses_geral"] = list(meses_unicos)
+        meses_atuais = [x for x in st.session_state.get("filtro_meses_geral", meses_unicos) if x in meses_unicos]
+        st.session_state["filtro_meses_geral"] = meses_atuais
         meses_sel = st.sidebar.multiselect(
             "Mês/Ano (Geral):",
             options=meses_unicos,
-            default=meses_unicos,
+            default=meses_atuais,
             key="filtro_meses_geral"
         )
 
-        regionais_disponiveis = [str(r) for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
+        regionais_disponiveis = [str(r) for r in ["Regional 1", "Regional 2"] if r in df_ano['Regional_Nome'].unique()]
 
         if perfil_usuario in ["Administrador", "Controladoria"]:
             if selecionar_todos:
@@ -3850,7 +3947,7 @@ def renderizar_dashboard():
         else:
             regionais_sel = regionais_disponiveis
 
-        lojas_unicas = [str(x) for x in df[df['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
+        lojas_unicas = [str(x) for x in df_ano[df_ano['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
         lojas_disponiveis = sorted(lojas_unicas)
 
         if perfil_usuario in ["Administrador", "Controladoria"]:
@@ -3872,7 +3969,7 @@ def renderizar_dashboard():
             lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
             lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] or lojas_disponiveis
 
-        marcas_unicas = [str(x) for x in df['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
+        marcas_unicas = [str(x) for x in df_ano['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
         marcas_disponiveis = sorted(marcas_unicas)
         if selecionar_todos:
             st.session_state["filtro_marcas_geral"] = list(marcas_disponiveis)
@@ -3884,15 +3981,41 @@ def renderizar_dashboard():
         )
 
         # Base Global Filtrada
-        df_filtered = df[
-            (df['Mes_Ano'].isin(meses_sel)) &
-            (df['Regional_Nome'].isin(regionais_sel)) &
-            (df['Loja_Nome'].isin(lojas_sel)) &
-            (df['Marca_Nome'].isin(marcas_sel))
+        df_filtered = df_ano[
+            (df_ano['Mes_Ano'].isin(meses_sel)) &
+            (df_ano['Regional_Nome'].isin(regionais_sel)) &
+            (df_ano['Loja_Nome'].isin(lojas_sel)) &
+            (df_ano['Marca_Nome'].isin(marcas_sel))
         ]
 
         st.title("📊 Dashboard Executivo de Inventário")
         st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
+
+        # Arquivo anual do Dashboard: salva os dados do ano selecionado em Excel,
+        # para que cada exercício possa ser arquivado separadamente.
+        if ano_dashboard is not None:
+            with st.expander(f"📁 Arquivo anual do Dashboard — {ano_dashboard}", expanded=False):
+                st.caption("Este arquivo contém os dados de inventário do ano selecionado, respeitando os filtros gerais aplicados.")
+                df_exportacao = df_filtered.copy()
+                if not df_exportacao.empty:
+                    colunas_auxiliares = [c for c in ["Data_dt", "Ano"] if c in df_exportacao.columns]
+                    df_exportacao = df_exportacao.drop(columns=colunas_auxiliares, errors="ignore")
+                    output_dashboard_anual = io.BytesIO()
+                    with pd.ExcelWriter(output_dashboard_anual, engine="openpyxl") as writer:
+                        df_exportacao.to_excel(writer, index=False, sheet_name=f"Dashboard_{ano_dashboard}")
+                    output_dashboard_anual.seek(0)
+                    st.download_button(
+                        label=f"📥 Salvar Dashboard {ano_dashboard}",
+                        data=output_dashboard_anual.getvalue(),
+                        file_name=f"dashboard_inventario_{ano_dashboard}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        key=f"download_dashboard_anual_{ano_dashboard}"
+                    )
+                    st.caption(f"{len(df_exportacao):,} registros incluídos no arquivo.".replace(",", "."))
+                else:
+                    st.info(f"Não há dados para o Dashboard de {ano_dashboard} com os filtros selecionados.")
+
         st.markdown("---")
 
         perda_total_rs = float(df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum())
