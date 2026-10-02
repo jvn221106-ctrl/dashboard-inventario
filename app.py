@@ -2651,7 +2651,127 @@ def renderizar_aba_gestao_lojas():
 
         # Oculta o SAP ID somente na tabela consolidada.
         df_lojas_vis = df_lojas_vis.drop(columns=["SAP ID"], errors="ignore")
-        st.dataframe(df_lojas_vis, use_container_width=True)
+
+        # A tabela consolidada agora pode ser editada diretamente.
+        # As únicas colunas que permanecem automáticas/bloqueadas são:
+        # - Nº do Grupo: sempre acompanha o Grupo;
+        # - Observações: registra automaticamente data e usuário;
+        # - Gmail padrão Recebimento: somente Administrador pode alterar.
+        # Gerente/Líder não podem trocar a loja pela tabela; continuam limitados à própria loja.
+        mapa_grupo_numero_tabela = {}
+        if "GRUPO" in df_lojas.columns and "N DO GRUPO" in df_lojas.columns:
+            for _, rg in df_lojas[["GRUPO", "N DO GRUPO"]].dropna(how="all").iterrows():
+                g = str(rg.get("GRUPO", "")).strip()
+                n = str(rg.get("N DO GRUPO", "")).strip()
+                if g and g not in {"-", "nan", "None"} and n and n not in {"-", "nan", "None"}:
+                    mapa_grupo_numero_tabela.setdefault(g, n)
+        grupos_tabela = sorted(mapa_grupo_numero_tabela.keys())
+
+        colunas_bloqueadas_tabela = [c for c in ["N DO GRUPO", "Coluna 1"] if c in df_lojas_vis.columns]
+        if "Gmail padrão Recebimento" in df_lojas_vis.columns and perfil_usuario != "Administrador":
+            colunas_bloqueadas_tabela.append("Gmail padrão Recebimento")
+        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+            colunas_bloqueadas_tabela.extend([c for c in ["Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO"] if c in df_lojas_vis.columns])
+
+        config_tabela = {}
+        if "GRUPO" in df_lojas_vis.columns and grupos_tabela:
+            config_tabela["GRUPO"] = st.column_config.SelectboxColumn(
+                "GRUPO", options=grupos_tabela, required=False
+            )
+        if "N DO GRUPO" in df_lojas_vis.columns:
+            config_tabela["N DO GRUPO"] = st.column_config.TextColumn("Nº do Grupo", disabled=True)
+        if "Coluna 1" in df_lojas_vis.columns:
+            config_tabela["Coluna 1"] = st.column_config.TextColumn("Observações", disabled=True)
+
+        tabela_editada = st.data_editor(
+            df_lojas_vis,
+            key="editor_tabela_consolidada",
+            use_container_width=True,
+            hide_index=False,
+            disabled=colunas_bloqueadas_tabela,
+            column_config=config_tabela,
+            num_rows="fixed"
+        )
+
+        if st.button("💾 Salvar alterações da tabela", type="primary", key="salvar_tabela_consolidada"):
+            dados_lojas_atual = list(dados_lojas)
+            historico_atual = list(historico_mudancas)
+            usr_atual = st.session_state.get("usuario_atual", "Administrador")
+            alterou = False
+            erros = []
+
+            for idx, linha_editada in tabela_editada.iterrows():
+                if idx not in df_lojas.index or idx >= len(dados_lojas_atual):
+                    continue
+
+                original = dados_lojas[idx]
+                novo = dict(original)
+
+                # Campos editáveis da tabela.
+                for campo in [
+                    "Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO", "NOME", "EMAIL",
+                    "TELEFONE", "SETOR", "CARGO", "GRUPO"
+                ]:
+                    if campo in linha_editada.index and campo not in colunas_bloqueadas_tabela:
+                        valor = linha_editada.get(campo, "")
+                        novo[campo] = "" if pd.isna(valor) else str(valor).strip()
+
+                # Segurança: gerente/líder continuam presos à própria loja.
+                if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                    permitidas = [x.strip().upper() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+                    loja_original = str(original.get("Nº LOJA", "")).strip().upper()
+                    loja_nova = str(novo.get("Nº LOJA", loja_original)).strip().upper()
+                    if loja_original not in permitidas or loja_nova != loja_original:
+                        erros.append(f"Linha {idx}: você só pode editar registros da sua própria loja.")
+                        continue
+
+                # O Nº do Grupo sempre é calculado a partir do Grupo.
+                grupo_novo = str(novo.get("GRUPO", "")).strip()
+                novo["N DO GRUPO"] = mapa_grupo_numero_tabela.get(
+                    grupo_novo, str(original.get("N DO GRUPO", "")).strip()
+                )
+
+                # Gmail de recebimento: somente Administrador pode alterar.
+                if perfil_usuario == "Administrador" and "Gmail padrão Recebimento" in linha_editada.index:
+                    valor_gmail = linha_editada.get("Gmail padrão Recebimento", "")
+                    novo["Gmail padrão Recebimento"] = "" if pd.isna(valor_gmail) else str(valor_gmail).strip()
+                else:
+                    novo["Gmail padrão Recebimento"] = original.get("Gmail padrão Recebimento", "")
+
+                # Observação automática somente quando houver mudança.
+                campos_comparacao = [
+                    "Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO", "NOME", "EMAIL",
+                    "TELEFONE", "SETOR", "CARGO", "N DO GRUPO", "GRUPO",
+                    "Gmail padrão Recebimento"
+                ]
+                mudou = any(
+                    str(novo.get(c, "")).strip() != str(original.get(c, "")).strip()
+                    for c in campos_comparacao
+                )
+
+                if mudou:
+                    novo["Coluna 1"] = f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')} por {usr_atual}"
+                    dados_lojas_atual[idx] = novo
+                    alterou = True
+                    historico_atual.append({
+                        "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        "Usuário Responsável": usr_atual,
+                        "Loja Afetada": f"{novo.get('Nº LOJA', '')} - {novo.get('REFERENCIA LOJA', '')}",
+                        "Colaborador": novo.get("NOME", ""),
+                        "Descrição da Mudança": "Registro editado diretamente na Tabela Consolidada de Lojas e Contatos.",
+                        "Observações": novo["Coluna 1"]
+                    })
+
+            if erros:
+                for erro in erros:
+                    st.error(f"❌ {erro}")
+
+            if alterou:
+                salvar_dados_lojas(dados_lojas_atual, historico_atual)
+                st.success("✅ Alterações da tabela salvas com sucesso!")
+                st.rerun()
+            elif not erros:
+                st.info("ℹ️ Nenhuma alteração foi detectada.")
 
         # Permite preencher diretamente os registros que ainda estão vazios.
         # Registros já preenchidos continuam sendo alterados pela aba de edição.
