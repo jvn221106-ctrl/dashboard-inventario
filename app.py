@@ -2528,6 +2528,14 @@ def formatar_qtd(val):
     prefix = "-" if val < 0 else ""
     return f"{prefix}{abs(val):,.0f} UN".replace(",", ".")
 
+def normalizar_numero_loja(valor):
+    """Padroniza o Nº Loja para o formato B001, B002, etc."""
+    return str(valor or "").strip().upper()
+
+def validar_numero_loja(valor):
+    """Aceita somente o padrão B + 3 dígitos, por exemplo B001."""
+    return bool(re.fullmatch(r"B\d{3}", normalizar_numero_loja(valor)))
+
 # --- GERENCIAMENTO DE SESSÃO ---
 if "logado" not in st.session_state:
     st.session_state["logado"] = False
@@ -2679,6 +2687,13 @@ def renderizar_aba_gestao_lojas():
             colunas_bloqueadas_tabela.extend([c for c in ["Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO"] if c in df_lojas_vis.columns])
 
         config_tabela = {}
+        if "Nº LOJA" in df_lojas_vis.columns:
+            config_tabela["Nº LOJA"] = st.column_config.TextColumn(
+                "Nº Loja",
+                help="Informe somente o código da loja no formato B001, B002, B010...",
+                validate=r"^B\d{3}$",
+                required=True
+            )
         if "GRUPO" in df_lojas_vis.columns and grupos_tabela:
             config_tabela["GRUPO"] = st.column_config.SelectboxColumn(
                 "GRUPO", options=grupos_tabela, required=False
@@ -2720,6 +2735,13 @@ def renderizar_aba_gestao_lojas():
                     if campo in linha_editada.index and campo not in colunas_bloqueadas_tabela:
                         valor = linha_editada.get(campo, "")
                         novo[campo] = "" if pd.isna(valor) else str(valor).strip()
+
+                # Padroniza e valida o Nº Loja sempre como B001, B002, B010...
+                if "Nº LOJA" in novo:
+                    novo["Nº LOJA"] = normalizar_numero_loja(novo["Nº LOJA"])
+                    if not validar_numero_loja(novo["Nº LOJA"]):
+                        erros.append(f"Linha {idx}: o Nº Loja deve estar no formato B001 (B + 3 dígitos).")
+                        continue
 
                 # Segurança: gerente/líder continuam presos à própria loja.
                 if perfil_usuario in ["Gerente", "Líder de Loja"]:
@@ -2966,7 +2988,12 @@ def renderizar_aba_gestao_lojas():
                 st.caption("Cadastre primeiro a loja. Depois, os colaboradores podem ser preenchidos pela tabela de registros vazios.")
                 nova_col1, nova_col2, nova_col3 = st.columns(3)
                 with nova_col1:
-                    nova_num_loja = st.text_input("Nº da Loja *", key="nova_loja_num")
+                    nova_num_loja = st.text_input(
+                        "Nº da Loja *",
+                        key="nova_loja_num",
+                        placeholder="B001",
+                        help="Digite somente o código da loja: B001, B002, B010..."
+                    )
                     nova_ref_loja = st.text_input("Referência da Loja *", key="nova_loja_ref")
                 with nova_col2:
                     nova_uf = st.text_input("UF", value="SP", key="nova_loja_uf")
@@ -2975,11 +3002,13 @@ def renderizar_aba_gestao_lojas():
                     nova_setor = st.selectbox("Setor inicial", ["LOJA", "ADMINISTRATIVO", "RECEBIMENTO / TROCAS", "RECEBIMENTO"], key="nova_loja_setor")
 
                 if st.button("➕ Criar Nova Loja", type="primary", key="criar_nova_loja"):
-                    num_novo = str(nova_num_loja).strip().upper()
+                    num_novo = normalizar_numero_loja(nova_num_loja)
                     ref_nova = str(nova_ref_loja).strip().upper()
 
                     if not num_novo or not ref_nova:
                         st.error("❌ Informe o Nº da Loja e a Referência da Loja.")
+                    elif not validar_numero_loja(num_novo):
+                        st.error("❌ O Nº da Loja deve ser informado somente no formato B001 (B + 3 dígitos).")
                     else:
                         loja_ja_existe = any(
                             str(r.get("Nº LOJA", "")).strip().upper() == num_novo or
@@ -3041,10 +3070,24 @@ def renderizar_aba_gestao_lojas():
             loja_sel = st.selectbox("Loja autorizada para edição:", loja_opcoes, disabled=True)
             loja_num_autorizada, loja_ref_autorizada = [x.strip() for x in loja_sel.split(" - ", 1)]
         else:
-            loja_opcoes = ["-- Nova Entrada --"] + list(df_lojas["REFERENCIA LOJA"].unique()) if not df_lojas.empty else ["-- Nova Entrada --"]
-            loja_sel = st.selectbox("Selecione uma Loja Existente para Editar ou Crie Uma Nova:", loja_opcoes)
-            loja_num_autorizada = "" if loja_sel == "-- Nova Entrada --" else loja_sel
-            loja_ref_autorizada = "" if loja_sel == "-- Nova Entrada --" else loja_sel
+            # A seleção mostra Nº Loja + referência, mas o campo editável de Nº Loja
+            # recebe somente o código B001/B002/etc.
+            opcoes_lojas = ["-- Nova Entrada --"]
+            mapa_opcoes_lojas = {}
+            if not df_lojas.empty:
+                for _, registro_loja in df_lojas[["Nº LOJA", "REFERENCIA LOJA"]].drop_duplicates().iterrows():
+                    num = normalizar_numero_loja(registro_loja.get("Nº LOJA", ""))
+                    ref = str(registro_loja.get("REFERENCIA LOJA", "")).strip()
+                    if num and ref:
+                        opcao = f"{num} - {ref}"
+                        opcoes_lojas.append(opcao)
+                        mapa_opcoes_lojas[opcao] = (num, ref)
+            loja_sel = st.selectbox("Selecione uma Loja Existente para Editar ou Crie Uma Nova:", opcoes_lojas)
+            if loja_sel == "-- Nova Entrada --":
+                loja_num_autorizada = ""
+                loja_ref_autorizada = ""
+            else:
+                loja_num_autorizada, loja_ref_autorizada = mapa_opcoes_lojas[loja_sel]
 
         # Ação: permite retirar um colaborador sem apagar a loja inteira.
         acao = st.radio(
@@ -3103,10 +3146,15 @@ def renderizar_aba_gestao_lojas():
             col1, col2, col3 = st.columns(3)
             with col1:
                 if perfil_usuario in ["Gerente", "Líder de Loja"]:
-                    num_loja = st.text_input("Nº Loja:", value=loja_num_autorizada, disabled=True)
+                    num_loja = st.text_input("Nº Loja:", value=loja_num_autorizada, disabled=True, help="Código da loja no formato B001.")
                     ref_loja = st.text_input("Referência Loja:", value=loja_ref_autorizada, disabled=True)
                 else:
-                    num_loja = st.text_input("Nº Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
+                    num_loja = st.text_input(
+                        "Nº Loja:",
+                        value="" if loja_sel == "-- Nova Entrada --" else loja_num_autorizada,
+                        placeholder="B001",
+                        help="Digite somente o código da loja: B001, B002, B010..."
+                    )
                     ref_loja = st.text_input("Referência Loja:", value="" if loja_sel == "-- Nova Entrada --" else loja_sel)
                 uf = st.text_input("UF:", value="SP")
                 estado = st.text_input("Estado / Cidade:", value="SÃO PAULO")
@@ -3152,6 +3200,11 @@ def renderizar_aba_gestao_lojas():
                 )
 
             if st.button("💾 Salvar Registro e Registrar Mudança", type="primary"):
+                num_loja = normalizar_numero_loja(num_loja)
+                if not validar_numero_loja(num_loja):
+                    st.error("❌ O Nº da Loja deve ser informado somente no formato B001 (B + 3 dígitos).")
+                    return
+
                 if perfil_usuario in ["Gerente", "Líder de Loja"]:
                     lojas_permitidas_save = [
                         x.strip().upper()
