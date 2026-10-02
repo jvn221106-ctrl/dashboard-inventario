@@ -3259,6 +3259,131 @@ def renderizar_aba_gestao_lojas():
 
     with tab_logs:
         st.subheader("📜 Histórico e Registro de Mudanças")
+
+        # Backup e restauração do histórico de mudanças.
+        # O arquivo exportado contém somente o histórico desta aba,
+        # permitindo guardar uma cópia e restaurá-la posteriormente.
+        df_logs_export = pd.DataFrame(historico_mudancas) if historico_mudancas else pd.DataFrame(
+            columns=[
+                "Data/Hora",
+                "Usuário Responsável",
+                "Loja Afetada",
+                "Colaborador",
+                "Descrição da Mudança",
+                "Observações"
+            ]
+        )
+        if "Observações" not in df_logs_export.columns:
+            df_logs_export["Observações"] = ""
+
+        col_hist_exp, col_hist_imp = st.columns(2)
+
+        with col_hist_exp:
+            st.markdown("**💾 Exportar histórico**")
+            st.caption("Baixe uma cópia do histórico atual para guardar como backup.")
+            output_historico = io.BytesIO()
+            with pd.ExcelWriter(output_historico, engine="openpyxl") as writer:
+                df_logs_export.to_excel(writer, index=False, sheet_name="Historico_Mudancas")
+
+            st.download_button(
+                label="📥 Exportar Histórico (Excel)",
+                data=output_historico.getvalue(),
+                file_name=f"historico_mudancas_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="secondary",
+                key="download_historico_mudancas"
+            )
+
+        with col_hist_imp:
+            st.markdown("**♻️ Restaurar histórico**")
+            if perfil_usuario in ["Administrador", "Controladoria"]:
+                st.caption("Use um arquivo exportado anteriormente para colocar o histórico de volta no sistema.")
+                arquivo_historico = st.file_uploader(
+                    "Selecionar backup do histórico (Excel)",
+                    type=["xlsx", "xls"],
+                    key="upload_historico_mudancas"
+                )
+
+                modo_importacao = st.radio(
+                    "Como deseja importar?",
+                    [
+                        "Restaurar / substituir o histórico atual",
+                        "Adicionar somente registros que ainda não existem"
+                    ],
+                    key="modo_importacao_historico"
+                )
+
+                if arquivo_historico is not None:
+                    try:
+                        xls_historico = pd.ExcelFile(arquivo_historico)
+                        if "Historico_Mudancas" not in xls_historico.sheet_names:
+                            st.error("❌ O arquivo não possui a aba 'Historico_Mudancas'. Use um backup exportado pelo próprio sistema.")
+                        else:
+                            df_importado = pd.read_excel(
+                                xls_historico,
+                                sheet_name="Historico_Mudancas"
+                            ).fillna("")
+
+                            colunas_historico = [
+                                "Data/Hora",
+                                "Usuário Responsável",
+                                "Loja Afetada",
+                                "Colaborador",
+                                "Descrição da Mudança",
+                                "Observações"
+                            ]
+                            for coluna in colunas_historico:
+                                if coluna not in df_importado.columns:
+                                    df_importado[coluna] = ""
+                            df_importado = df_importado[colunas_historico]
+
+                            registros_importados = df_importado.to_dict(orient="records")
+                            registros_importados = [
+                                {
+                                    chave: str(valor).strip() if pd.notna(valor) else ""
+                                    for chave, valor in registro.items()
+                                }
+                                for registro in registros_importados
+                                if any(str(valor).strip() for valor in registro.values())
+                            ]
+
+                            st.info(f"📄 {len(registros_importados)} registro(s) encontrado(s) no backup.")
+
+                            if st.button(
+                                "♻️ Restaurar Histórico",
+                                type="primary",
+                                key="btn_restaurar_historico_mudancas"
+                            ):
+                                if modo_importacao.startswith("Restaurar"):
+                                    historico_mudancas = registros_importados
+                                    salvar_dados_lojas(dados_lojas, historico_mudancas)
+                                    st.success(f"✅ Histórico restaurado com sucesso: {len(registros_importados)} registro(s).")
+                                    st.rerun()
+                                else:
+                                    existentes = {
+                                        json.dumps(registro, ensure_ascii=False, sort_keys=True)
+                                        for registro in historico_mudancas
+                                    }
+                                    novos = []
+                                    for registro in registros_importados:
+                                        assinatura = json.dumps(registro, ensure_ascii=False, sort_keys=True)
+                                        if assinatura not in existentes:
+                                            novos.append(registro)
+                                            existentes.add(assinatura)
+
+                                    if novos:
+                                        historico_mudancas.extend(novos)
+                                        salvar_dados_lojas(dados_lojas, historico_mudancas)
+                                        st.success(f"✅ {len(novos)} novo(s) registro(s) adicionado(s) ao histórico.")
+                                        st.rerun()
+                                    else:
+                                        st.info("ℹ️ Nenhum registro novo foi encontrado no backup.")
+                    except Exception as e:
+                        st.error(f"❌ Erro ao processar o backup do histórico: {e}")
+            else:
+                st.caption("A restauração do histórico está disponível apenas para Administrador e Controladoria.")
+
+        st.markdown("---")
         if historico_mudancas:
             df_logs = pd.DataFrame(historico_mudancas)
             if "Observações" not in df_logs.columns:
