@@ -3731,16 +3731,30 @@ def renderizar_dashboard():
             st.cache_data.clear()
             st.rerun()
 
+        # Botão global para selecionar de uma vez todas as opções dos filtros
+        # disponíveis para o perfil do usuário.
+        selecionar_todos = st.sidebar.button("☑️ Selecionar todos os filtros", type="primary")
+
         meses_unicos = sorted([x for x in df['Mes_Ano'].unique() if x != 'Sem Data'])
-        meses_sel = st.sidebar.multiselect("Mês/Ano (Geral):", options=meses_unicos, default=meses_unicos)
+        if selecionar_todos:
+            st.session_state["filtro_meses_geral"] = list(meses_unicos)
+        meses_sel = st.sidebar.multiselect(
+            "Mês/Ano (Geral):",
+            options=meses_unicos,
+            default=meses_unicos,
+            key="filtro_meses_geral"
+        )
 
         regionais_disponiveis = [str(r) for r in ["Regional 1", "Regional 2"] if r in df['Regional_Nome'].unique()]
 
         if perfil_usuario in ["Administrador", "Controladoria"]:
+            if selecionar_todos:
+                st.session_state["filtro_regionais_geral"] = list(regionais_disponiveis)
             regionais_sel = st.sidebar.multiselect(
                 "Divisão Regional (Geral):", 
                 options=regionais_disponiveis, 
-                default=regionais_disponiveis
+                default=regionais_disponiveis,
+                key="filtro_regionais_geral"
             )
         elif perfil_usuario in ["Regional 1", "Regional 2"]:
             regionais_sel = [perfil_usuario]
@@ -3751,7 +3765,14 @@ def renderizar_dashboard():
         lojas_disponiveis = sorted(lojas_unicas)
 
         if perfil_usuario in ["Administrador", "Controladoria"]:
-            lojas_sel = st.sidebar.multiselect("Centros (Geral):", options=lojas_disponiveis, default=lojas_disponiveis)
+            if selecionar_todos:
+                st.session_state["filtro_lojas_geral"] = list(lojas_disponiveis)
+            lojas_sel = st.sidebar.multiselect(
+                "Centros (Geral):",
+                options=lojas_disponiveis,
+                default=lojas_disponiveis,
+                key="filtro_lojas_geral"
+            )
         elif perfil_usuario in ["Regional 1", "Regional 2"]:
             lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
             lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] if lojas_permitidas_usr else lojas_disponiveis
@@ -3761,7 +3782,15 @@ def renderizar_dashboard():
             lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] or lojas_disponiveis
 
         marcas_unicas = [str(x) for x in df['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
-        marcas_sel = st.sidebar.multiselect("Marcas (Geral):", options=sorted(marcas_unicas), default=sorted(marcas_unicas))
+        marcas_disponiveis = sorted(marcas_unicas)
+        if selecionar_todos:
+            st.session_state["filtro_marcas_geral"] = list(marcas_disponiveis)
+        marcas_sel = st.sidebar.multiselect(
+            "Marcas (Geral):",
+            options=marcas_disponiveis,
+            default=marcas_disponiveis,
+            key="filtro_marcas_geral"
+        )
 
         # Base Global Filtrada
         df_filtered = df[
