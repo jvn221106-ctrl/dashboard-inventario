@@ -4059,29 +4059,31 @@ def renderizar_dashboard():
         else:
             regionais_sel = regionais_disponiveis
 
-        lojas_unicas = [str(x) for x in df_ano[df_ano['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
-        lojas_disponiveis = sorted(lojas_unicas)
-
+        lojas_disponiveis = obter_lojas_permitidas_dashboard(df_ano, perfil_usuario, loja_usuario)
         if perfil_usuario in ["Administrador", "Controladoria"]:
-            if selecionar_todos:
-                st.session_state["filtro_lojas_geral"] = list(lojas_disponiveis)
-            lojas_sel = st.sidebar.multiselect(
-                "Centros (Geral):",
-                options=lojas_disponiveis,
-                default=lojas_disponiveis,
-                key="filtro_lojas_geral"
-            )
+            chave_lojas = "filtro_lojas_geral"
         elif perfil_usuario in ["Regional 1", "Regional 2", "Gerente de produtos 1", "Gerente de produtos 2"]:
-            # Gerentes de Produtos também podem filtrar por loja, respeitando
-            # as lojas da regional à qual o perfil está vinculado.
-            lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
-            lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] if lojas_permitidas_usr else lojas_disponiveis
-            if selecionar_todos:
-                st.session_state["filtro_lojas_geral_regional"] = list(lojas_filtradas_usr)
-            lojas_sel = st.sidebar.multiselect("Centros (Geral):", options=lojas_filtradas_usr, default=lojas_filtradas_usr, key="filtro_lojas_geral_regional")
+            chave_lojas = "filtro_lojas_geral_regional"
         else:
-            lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
-            lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] or lojas_disponiveis
+            chave_lojas = "filtro_lojas_geral_loja"
+
+        lojas_atuais = [x for x in st.session_state.get(chave_lojas, lojas_disponiveis) if x in lojas_disponiveis]
+        if not lojas_atuais:
+            lojas_atuais = list(lojas_disponiveis)
+        if selecionar_todos:
+            lojas_atuais = list(lojas_disponiveis)
+            st.session_state[chave_lojas] = lojas_atuais
+
+        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+            lojas_sel = list(lojas_atuais)
+            st.sidebar.caption("🏬 Acesso restrito às lojas vinculadas ao seu usuário.")
+        else:
+            lojas_sel = st.sidebar.multiselect(
+                "Centros / Lojas (Geral):",
+                options=lojas_disponiveis,
+                default=lojas_atuais,
+                key=chave_lojas
+            )
 
         marcas_unicas = [str(x) for x in df_ano['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
         marcas_disponiveis = sorted(marcas_unicas)
@@ -4105,30 +4107,75 @@ def renderizar_dashboard():
         st.title("📊 Dashboard Executivo de Inventário")
         st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
 
-        # Arquivo anual do Dashboard: salva os dados do ano selecionado em Excel,
-        # para que cada exercício possa ser arquivado separadamente.
+        # Arquivo anual do Dashboard: exportação completa do exercício selecionado.
         if ano_dashboard is not None:
             with st.expander(f"📁 Arquivo anual do Dashboard — {ano_dashboard}", expanded=False):
-                st.caption("Este arquivo contém os dados de inventário do ano selecionado, respeitando os filtros gerais aplicados.")
-                df_exportacao = df_filtered.copy()
-                if not df_exportacao.empty:
-                    colunas_auxiliares = [c for c in ["Data_dt", "Ano"] if c in df_exportacao.columns]
-                    df_exportacao = df_exportacao.drop(columns=colunas_auxiliares, errors="ignore")
-                    output_dashboard_anual = io.BytesIO()
-                    with pd.ExcelWriter(output_dashboard_anual, engine="openpyxl") as writer:
-                        df_exportacao.to_excel(writer, index=False, sheet_name=f"Dashboard_{ano_dashboard}")
-                    output_dashboard_anual.seek(0)
-                    st.download_button(
-                        label=f"📥 Salvar Dashboard {ano_dashboard}",
-                        data=output_dashboard_anual.getvalue(),
-                        file_name=f"dashboard_inventario_{ano_dashboard}.xlsx",
+                st.caption("Exporte o exercício completo ou somente a visão atual com os filtros aplicados.")
+                df_ano_export = df_ano[
+                    (df_ano['Regional_Nome'].isin(regionais_sel)) &
+                    (df_ano['Loja_Nome'].isin(lojas_sel)) &
+                    (df_ano['Marca_Nome'].isin(marcas_sel))
+                ].copy()
+                df_filtrado_export = df_filtered.copy()
+
+                resumo_export = pd.DataFrame([{
+                    'Ano': ano_dashboard,
+                    'Meses selecionados': ', '.join(meses_sel),
+                    'Regiões': ', '.join(regionais_sel),
+                    'Lojas': ', '.join(lojas_sel),
+                    'Marcas': ', '.join(marcas_sel),
+                    'Perda R$': abs(float(df_ano_export.loc[df_ano_export['Valor_Limpo'] < 0, 'Valor_Limpo'].sum())),
+                    'Perda Qtd': abs(float(df_ano_export.loc[df_ano_export['Qtd_Limpa'] < 0, 'Qtd_Limpa'].sum())),
+                    'Sobras R$': float(df_ano_export.loc[df_ano_export['Valor_Limpo'] > 0, 'Valor_Limpo'].sum()),
+                    'Registros': len(df_ano_export)
+                }])
+                mensal_export = _agregar_resultado_mensal(df_ano_export)
+                por_loja_export = df_ano_export.groupby('Loja_Nome').agg(
+                    Perda_RS=('Valor_Limpo', lambda x: abs(x[x < 0].sum())),
+                    Perda_UN=('Qtd_Limpa', lambda x: abs(x[x < 0].sum()))
+                ).reset_index().sort_values('Perda_RS', ascending=False)
+                por_marca_export = df_ano_export.groupby('Marca_Nome').agg(
+                    Perda_RS=('Valor_Limpo', lambda x: abs(x[x < 0].sum())),
+                    Perda_UN=('Qtd_Limpa', lambda x: abs(x[x < 0].sum()))
+                ).reset_index().sort_values('Perda_RS', ascending=False)
+                por_prod_export = df_ano_export[df_ano_export['Valor_Limpo'] < 0].groupby(
+                    ['Material_Codigo', 'Material_Nome']
+                ).agg(Perda_RS=('Valor_Limpo', lambda x: abs(x.sum())), Perda_UN=('Qtd_Limpa', lambda x: abs(x[x < 0].sum()))).reset_index().sort_values('Perda_RS', ascending=False).head(100)
+
+                out_full = io.BytesIO()
+                with pd.ExcelWriter(out_full, engine='openpyxl') as writer:
+                    resumo_export.to_excel(writer, index=False, sheet_name='Resumo_Executivo')
+                    mensal_export.drop(columns=['Mes_Ordem'], errors='ignore').to_excel(writer, index=False, sheet_name='Evolucao_Mensal')
+                    por_loja_export.to_excel(writer, index=False, sheet_name='Por_Loja')
+                    por_marca_export.to_excel(writer, index=False, sheet_name='Por_Marca')
+                    por_prod_export.to_excel(writer, index=False, sheet_name='Top_Produtos')
+                    df_ano_export.drop(columns=['Data_dt', 'Ano'], errors='ignore').to_excel(writer, index=False, sheet_name='Dados_Anuais')
+                    df_filtrado_export.drop(columns=['Data_dt', 'Ano'], errors='ignore').to_excel(writer, index=False, sheet_name='Visao_Filtrada')
+                out_full.seek(0)
+
+                col_exp1, col_exp2 = st.columns(2)
+                with col_exp1:
+                    if st.download_button(
+                        label=f"📦 Exportar Dashboard completo {ano_dashboard}",
+                        data=out_full.getvalue(),
+                        file_name=f"Dashboard_Vonny_{ano_dashboard}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary",
-                        key=f"download_dashboard_anual_{ano_dashboard}"
+                        type="primary", key=f"download_dashboard_completo_{ano_dashboard}"
+                    ):
+                        registrar_evento_auditoria(email_logado, "EXPORTACAO_DASHBOARD", f"Ano {ano_dashboard} — arquivo completo")
+                with col_exp2:
+                    out_filtered = io.BytesIO()
+                    with pd.ExcelWriter(out_filtered, engine='openpyxl') as writer:
+                        df_filtrado_export.drop(columns=['Data_dt', 'Ano'], errors='ignore').to_excel(writer, index=False, sheet_name=f'Dashboard_{ano_dashboard}')
+                    out_filtered.seek(0)
+                    st.download_button(
+                        label=f"📥 Exportar somente filtros atuais",
+                        data=out_filtered.getvalue(),
+                        file_name=f"Dashboard_Vonny_{ano_dashboard}_filtrado.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"download_dashboard_filtrado_{ano_dashboard}"
                     )
-                    st.caption(f"{len(df_exportacao):,} registros incluídos no arquivo.".replace(",", "."))
-                else:
-                    st.info(f"Não há dados para o Dashboard de {ano_dashboard} com os filtros selecionados.")
+                st.caption(f"Arquivo completo: {len(df_ano_export):,} registros | Visão filtrada: {len(df_filtrado_export):,} registros.".replace(',', '.'))
 
         st.markdown("---")
 
@@ -4142,6 +4189,92 @@ def renderizar_dashboard():
         kpi2.metric("Perda Total (R$)", formatar_moeda(perda_total_rs))
         kpi3.metric("Sobras / Ajustes (+)", formatar_moeda(sobra_total_rs))
         kpi4.metric("Resultado Net (Caixa)", formatar_moeda(resultado_net))
+
+        # ==================================================================
+        # VISÃO EXECUTIVA ANUAL
+        # ==================================================================
+        st.markdown("---")
+        st.subheader(f"🎯 Visão Executiva — {ano_dashboard}")
+
+        lojas_exec = int(df_filtered['Loja_Nome'].nunique()) if not df_filtered.empty else 0
+        marcas_exec = int(df_filtered['Marca_Nome'].nunique()) if not df_filtered.empty else 0
+        registros_exec = int(len(df_filtered))
+        meses_exec = int(df_filtered['Mes_Ano'].nunique()) if not df_filtered.empty else 0
+
+        ex1, ex2, ex3, ex4 = st.columns(4)
+        ex1.metric("🏬 Lojas", lojas_exec)
+        ex2.metric("🏷️ Marcas", marcas_exec)
+        ex3.metric("📦 Registros", f"{registros_exec:,}".replace(',', '.'))
+        ex4.metric("📅 Meses com dados", meses_exec)
+
+        mensal_exec = _agregar_resultado_mensal(df_filtered)
+        if not mensal_exec.empty:
+            st.markdown("#### 📈 Evolução Mensal")
+            fig_evolucao = px.line(
+                mensal_exec,
+                x='Mes_Ano',
+                y='Perda_RS',
+                markers=True,
+                text=mensal_exec['Perda_RS'].map(lambda x: f"R$ {x:,.0f}".replace(',', 'X').replace('.', ',').replace('X', '.')),
+                labels={'Mes_Ano': 'Mês/Ano', 'Perda_RS': 'Perda (R$)'}
+            )
+            fig_evolucao.update_traces(textposition='top center')
+            fig_evolucao.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_evolucao, use_container_width=True)
+
+            if len(mensal_exec) >= 2:
+                mes_atual = mensal_exec.iloc[-1]['Mes_Ano']
+                mes_anterior = mensal_exec.iloc[-2]['Mes_Ano']
+                atual, anterior, var_rs, var_qtd = _comparar_periodos(df_filtered, mes_atual, mes_anterior)
+
+                st.markdown(f"#### 🔄 Comparativo: {mes_anterior} × {mes_atual}")
+                cp1, cp2, cp3, cp4 = st.columns(4)
+                cp1.metric(f"Perda R$ — {mes_anterior}", formatar_moeda(anterior['valor']))
+                cp2.metric(f"Perda R$ — {mes_atual}", formatar_moeda(atual['valor']), _formatar_variacao(var_rs))
+                cp3.metric(f"Perda Qtd — {mes_anterior}", formatar_qtd(anterior['qtd']))
+                cp4.metric(f"Perda Qtd — {mes_atual}", formatar_qtd(atual['qtd']), _formatar_variacao(var_qtd))
+
+        # Alertas gerenciais: somente fatos calculados sobre a visão atualmente filtrada.
+        st.markdown("#### 🚨 Alertas Gerenciais")
+        alertas = []
+        if not df_filtered.empty:
+            por_loja_alerta = df_filtered.groupby('Loja_Nome').agg(
+                Perda_RS=('Valor_Limpo', lambda x: abs(x[x < 0].sum())),
+                Perda_UN=('Qtd_Limpa', lambda x: abs(x[x < 0].sum()))
+            ).reset_index().sort_values('Perda_RS', ascending=False)
+            if not por_loja_alerta.empty:
+                total_perda_lojas = float(por_loja_alerta['Perda_RS'].sum())
+                if total_perda_lojas > 0:
+                    por_loja_alerta['Participacao'] = por_loja_alerta['Perda_RS'] / total_perda_lojas * 100
+                    concentradas = por_loja_alerta[por_loja_alerta['Participacao'] >= 20].head(10)
+                    for _, row in concentradas.iterrows():
+                        alertas.append(f"🏬 {row['Loja_Nome']}: {row['Participacao']:.1f}% da perda total em R$".replace('.', ','))
+
+        if alertas:
+            for alerta in alertas:
+                st.warning(alerta)
+        else:
+            st.info("Nenhum alerta gerencial relevante foi identificado na visão atual.")
+
+        # Exportação rápida da visão atual em Excel.
+        with st.expander("📤 Exportar visão atual", expanded=False):
+            export_atual = io.BytesIO()
+            with pd.ExcelWriter(export_atual, engine='openpyxl') as writer:
+                df_filtered.drop(columns=['Data_dt', 'Ano'], errors='ignore').to_excel(
+                    writer, index=False, sheet_name='Visao_Filtrada'
+                )
+                mensal_exec.drop(columns=['Mes_Ordem'], errors='ignore').to_excel(
+                    writer, index=False, sheet_name='Evolucao_Mensal'
+                )
+            export_atual.seek(0)
+            if st.download_button(
+                "📥 Baixar visão filtrada",
+                data=export_atual.getvalue(),
+                file_name=f"Dashboard_Vonny_{ano_dashboard}_visao_filtrada.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"download_visao_filtrada_exec_{ano_dashboard}"
+            ):
+                registrar_evento_auditoria(email_logado, "EXPORTACAO_DASHBOARD", f"Ano {ano_dashboard} — visão filtrada")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
