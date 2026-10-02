@@ -2653,6 +2653,184 @@ def renderizar_aba_gestao_lojas():
         df_lojas_vis = df_lojas_vis.drop(columns=["SAP ID"], errors="ignore")
         st.dataframe(df_lojas_vis, use_container_width=True)
 
+        # Permite preencher diretamente os registros que ainda estão vazios.
+        # Registros já preenchidos continuam sendo alterados pela aba de edição.
+        def _campo_vazio(valor):
+            if pd.isna(valor):
+                return True
+            texto = str(valor).strip()
+            return texto == "" or texto in {"-", "nan", "None"}
+
+        if not df_lojas_vis.empty:
+            mascara_vazios = df_lojas_vis["NOME"].apply(_campo_vazio) if "NOME" in df_lojas_vis.columns else pd.Series(False, index=df_lojas_vis.index)
+            df_vazios = df_lojas_vis[mascara_vazios].copy()
+        else:
+            df_vazios = pd.DataFrame()
+
+        if not df_vazios.empty:
+            st.markdown("### ✏️ Preencher registros vazios diretamente na tabela")
+            st.caption("Use esta área somente para os espaços ainda vazios. Registros que já possuem colaborador continuam sendo atualizados pela aba 'Atualizar / Editar Dados'.")
+
+            # Grupos e respectivos números já cadastrados no banco.
+            mapa_grupo_numero = {}
+            if "GRUPO" in df_lojas.columns and "N DO GRUPO" in df_lojas.columns:
+                for _, rg in df_lojas[["GRUPO", "N DO GRUPO"]].dropna(how="all").iterrows():
+                    g = str(rg.get("GRUPO", "")).strip()
+                    n = str(rg.get("N DO GRUPO", "")).strip()
+                    if g and g not in {"-", "nan", "None"} and n and n not in {"-", "nan", "None"}:
+                        mapa_grupo_numero.setdefault(g, n)
+            grupos_disponiveis = sorted(mapa_grupo_numero.keys())
+
+            colunas_editaveis = [
+                "Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO", "NOME", "EMAIL",
+                "TELEFONE", "SETOR", "CARGO", "GRUPO", "N DO GRUPO",
+                "Gmail padrão Recebimento", "Coluna 1"
+            ]
+            colunas_editaveis = [c for c in colunas_editaveis if c in df_vazios.columns]
+            editor_df = df_vazios[colunas_editaveis].copy()
+
+            # Campos técnicos/preenchidos pela loja ficam bloqueados.
+            disabled_cols = [c for c in ["Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO", "SETOR", "N DO GRUPO", "Coluna 1"] if c in editor_df.columns]
+            if perfil_usuario != "Administrador" and "Gmail padrão Recebimento" in editor_df.columns:
+                disabled_cols.append("Gmail padrão Recebimento")
+
+            column_config = {}
+            if "GRUPO" in editor_df.columns and grupos_disponiveis:
+                column_config["GRUPO"] = st.column_config.SelectboxColumn(
+                    "GRUPO", options=grupos_disponiveis, required=False
+                )
+            if "N DO GRUPO" in editor_df.columns:
+                column_config["N DO GRUPO"] = st.column_config.TextColumn("Nº do Grupo")
+            if "Coluna 1" in editor_df.columns:
+                column_config["Coluna 1"] = st.column_config.TextColumn("Observações", disabled=True)
+
+            edited_vazios = st.data_editor(
+                editor_df,
+                key="editor_registros_vazios",
+                use_container_width=True,
+                hide_index=False,
+                disabled=disabled_cols,
+                column_config=column_config,
+                num_rows="fixed"
+            )
+
+            if st.button("💾 Salvar preenchimentos da tabela", type="primary", key="salvar_vazios_tabela"):
+                dados_lojas_atual = list(dados_lojas)
+                historico_atual = list(historico_mudancas)
+                usr_atual = st.session_state.get("usuario_atual", "Administrador")
+                alterou = False
+                erros = []
+
+                # Processa de baixo para cima para que remoções por transferência não
+                # alterem os índices das vagas que ainda serão preenchidas.
+                linhas_editadas = list(edited_vazios.iterrows())
+                linhas_editadas.sort(key=lambda item: item[0], reverse=True)
+                for idx, linha_editada in linhas_editadas:
+                    nome_novo = str(linha_editada.get("NOME", "")).strip()
+                    if not nome_novo or nome_novo in {"-", "nan", "None"}:
+                        continue
+
+                    # Localiza o registro original correspondente ao índice do DataFrame.
+                    idx_original = idx
+                    if idx_original not in df_lojas.index:
+                        continue
+                    registro_original = dados_lojas[idx_original]
+                    loja_destino_num = str(registro_original.get("Nº LOJA", linha_editada.get("Nº LOJA", ""))).strip()
+                    loja_destino_ref = str(registro_original.get("REFERENCIA LOJA", linha_editada.get("REFERENCIA LOJA", ""))).strip()
+
+                    # Segurança: gerente/líder só podem preencher a própria loja.
+                    if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                        permitidas = [x.strip().upper() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+                        if loja_destino_num.upper() not in permitidas:
+                            erros.append(f"{nome_novo}: loja não autorizada.")
+                            continue
+
+                    grupo_novo = str(linha_editada.get("GRUPO", "")).strip()
+                    num_grupo_novo = mapa_grupo_numero.get(grupo_novo, str(linha_editada.get("N DO GRUPO", "")).strip())
+                    email_rec_novo = str(linha_editada.get("Gmail padrão Recebimento", registro_original.get("Gmail padrão Recebimento", ""))).strip()
+                    observacao_auto = f"Atualizado em {datetime.datetime.now().strftime('%d/%m/%Y')} por {usr_atual}"
+
+                    novo_registro = dict(registro_original)
+                    novo_registro.update({
+                        "Nº LOJA": loja_destino_num,
+                        "REFERENCIA LOJA": loja_destino_ref,
+                        "NOME": nome_novo,
+                        "EMAIL": str(linha_editada.get("EMAIL", "")).strip(),
+                        "TELEFONE": str(linha_editada.get("TELEFONE", "")).strip(),
+                        "CARGO": str(linha_editada.get("CARGO", "")).strip(),
+                        "GRUPO": grupo_novo,
+                        "N DO GRUPO": num_grupo_novo,
+                        "Gmail padrão Recebimento": email_rec_novo if perfil_usuario == "Administrador" else registro_original.get("Gmail padrão Recebimento", ""),
+                        "Coluna 1": observacao_auto
+                    })
+
+                    nome_norm = nome_novo.casefold()
+                    indices_nome = [
+                        i for i, r in enumerate(dados_lojas_atual)
+                        if i != idx_original and nome_norm and str(r.get("NOME", "")).strip().casefold() == nome_norm
+                    ]
+
+                    if indices_nome:
+                        origem_idx = indices_nome[0]
+                        origem = dados_lojas_atual[origem_idx]
+                        origem_num = str(origem.get("Nº LOJA", "")).strip()
+                        origem_ref = str(origem.get("REFERENCIA LOJA", "")).strip()
+
+                        # Para preencher uma vaga, a transferência de alguém de outra loja
+                        # também respeita as permissões de gerente/líder.
+                        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+                            permitidas = [x.strip().upper() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+                            if origem_num.upper() not in permitidas:
+                                erros.append(f"{nome_novo}: colaborador pertence a outra loja.")
+                                continue
+
+                        if not email_rec_novo:
+                            novo_registro["Gmail padrão Recebimento"] = origem.get("Gmail padrão Recebimento", "")
+                        # Remove a pessoa da loja de origem e preenche a vaga.
+                        dados_lojas_atual.pop(origem_idx)
+                        # Ajusta o índice da vaga caso ela esteja depois da origem.
+                        idx_insercao = idx_original - 1 if origem_idx < idx_original else idx_original
+                        if 0 <= idx_insercao < len(dados_lojas_atual):
+                            dados_lojas_atual[idx_insercao] = novo_registro
+                        else:
+                            dados_lojas_atual.append(novo_registro)
+
+                        historico_atual.append({
+                            "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Usuário Responsável": usr_atual,
+                            "Loja Afetada": f"{loja_destino_num} - {loja_destino_ref}",
+                            "Colaborador": nome_novo,
+                            "Descrição da Mudança": f"Colaborador transferido de {origem_num} - {origem_ref} para {loja_destino_num} - {loja_destino_ref}.",
+                            "Observações": observacao_auto
+                        })
+                    else:
+                        dados_lojas_atual[idx_original] = novo_registro
+                        historico_atual.append({
+                            "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Usuário Responsável": usr_atual,
+                            "Loja Afetada": f"{loja_destino_num} - {loja_destino_ref}",
+                            "Colaborador": nome_novo,
+                            "Descrição da Mudança": "Cadastro de colaborador preenchido diretamente pela tabela.",
+                            "Observações": observacao_auto
+                        })
+
+                    alterou = True
+
+                if erros:
+                    for erro in erros:
+                        st.error(f"❌ {erro}")
+
+                if alterou and not erros:
+                    salvar_dados_lojas(dados_lojas_atual, historico_atual)
+                    st.success("✅ Registros vazios preenchidos e salvos com sucesso!")
+                    st.rerun()
+                elif alterou:
+                    salvar_dados_lojas(dados_lojas_atual, historico_atual)
+                    st.warning("⚠️ Alguns registros foram salvos e outros não puderam ser alterados.")
+                    st.rerun()
+        else:
+            st.info("Não há registros vazios disponíveis para preenchimento direto nesta loja/visão.")
+
     with tab_edit:
         st.subheader("📝 Adicionar ou Modificar Registro de Loja")
 
