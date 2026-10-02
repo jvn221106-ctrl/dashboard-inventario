@@ -24,6 +24,11 @@ st.markdown("""
         background-color: #0e1117;
         color: #ffffff;
     }
+
+    /* Oculta a barra superior do Streamlit (Fork, GitHub e menu de três pontos). */
+    div[data-testid="stToolbar"] {
+        display: none !important;
+    }
     div[data-testid="stMetricValue"] {
         font-size: 1.8rem !important;
         font-weight: bold;
