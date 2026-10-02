@@ -2665,6 +2665,66 @@ def renderizar_aba_gestao_lojas():
         # Oculta o SAP ID somente na tabela consolidada.
         df_lojas_vis = df_lojas_vis.drop(columns=["SAP ID"], errors="ignore")
 
+        # ------------------------------------------------------------------
+        # FILTROS DA TABELA CONSOLIDADA
+        # ------------------------------------------------------------------
+        # Os filtros são independentes da tabela de edição e preservam os
+        # índices originais, para que salvar/excluir continue apontando para
+        # o registro correto na base.
+        st.markdown("### 🔎 Filtros da Tabela Consolidada")
+        st.caption("Você pode combinar vários filtros para localizar exatamente os registros desejados.")
+
+        col_ft1, col_ft2, col_ft3, col_ft4 = st.columns(4)
+
+        opcoes_filtro_tabela = {
+            "filtro_tabela_loja": sorted([str(x) for x in df_lojas_vis["Nº LOJA"].dropna().unique()]) if "Nº LOJA" in df_lojas_vis.columns else [],
+            "filtro_tabela_referencia": sorted([str(x) for x in df_lojas_vis["REFERENCIA LOJA"].dropna().unique()]) if "REFERENCIA LOJA" in df_lojas_vis.columns else [],
+            "filtro_tabela_uf": sorted([str(x) for x in df_lojas_vis["UF"].dropna().unique()]) if "UF" in df_lojas_vis.columns else [],
+            "filtro_tabela_estado": sorted([str(x) for x in df_lojas_vis["ESTADO"].dropna().unique()]) if "ESTADO" in df_lojas_vis.columns else [],
+            "filtro_tabela_nome": sorted([str(x) for x in df_lojas_vis["NOME"].dropna().unique()]) if "NOME" in df_lojas_vis.columns else [],
+            "filtro_tabela_setor": sorted([str(x) for x in df_lojas_vis["SETOR"].dropna().unique()]) if "SETOR" in df_lojas_vis.columns else [],
+            "filtro_tabela_cargo": sorted([str(x) for x in df_lojas_vis["CARGO"].dropna().unique()]) if "CARGO" in df_lojas_vis.columns else [],
+            "filtro_tabela_grupo": sorted([str(x) for x in df_lojas_vis["GRUPO"].dropna().unique()]) if "GRUPO" in df_lojas_vis.columns else [],
+        }
+
+        # O botão global de seleção de filtros também contempla a Tabela
+        # Consolidada quando esta tela estiver aberta.
+        if st.button("☑️ Selecionar todos os filtros da Tabela Consolidada", key="selecionar_todos_filtros_tabela", type="secondary"):
+            for chave, opcoes in opcoes_filtro_tabela.items():
+                st.session_state[chave] = opcoes
+            st.rerun()
+
+        with col_ft1:
+            f_tabela_loja = st.multiselect("Nº Loja:", opcoes_filtro_tabela["filtro_tabela_loja"], default=opcoes_filtro_tabela["filtro_tabela_loja"], key="filtro_tabela_loja")
+            f_tabela_ref = st.multiselect("Referência Loja:", opcoes_filtro_tabela["filtro_tabela_referencia"], default=opcoes_filtro_tabela["filtro_tabela_referencia"], key="filtro_tabela_referencia")
+        with col_ft2:
+            f_tabela_uf = st.multiselect("UF:", opcoes_filtro_tabela["filtro_tabela_uf"], default=opcoes_filtro_tabela["filtro_tabela_uf"], key="filtro_tabela_uf")
+            f_tabela_estado = st.multiselect("Estado:", opcoes_filtro_tabela["filtro_tabela_estado"], default=opcoes_filtro_tabela["filtro_tabela_estado"], key="filtro_tabela_estado")
+        with col_ft3:
+            f_tabela_nome = st.multiselect("Colaborador:", opcoes_filtro_tabela["filtro_tabela_nome"], default=opcoes_filtro_tabela["filtro_tabela_nome"], key="filtro_tabela_nome")
+            f_tabela_setor = st.multiselect("Setor:", opcoes_filtro_tabela["filtro_tabela_setor"], default=opcoes_filtro_tabela["filtro_tabela_setor"], key="filtro_tabela_setor")
+        with col_ft4:
+            f_tabela_cargo = st.multiselect("Cargo:", opcoes_filtro_tabela["filtro_tabela_cargo"], default=opcoes_filtro_tabela["filtro_tabela_cargo"], key="filtro_tabela_cargo")
+            f_tabela_grupo = st.multiselect("Grupo:", opcoes_filtro_tabela["filtro_tabela_grupo"], default=opcoes_filtro_tabela["filtro_tabela_grupo"], key="filtro_tabela_grupo")
+
+        # Aplica os filtros sem alterar os índices originais dos registros.
+        mascara_tabela = pd.Series(True, index=df_lojas_vis.index)
+        for coluna, selecionados in [
+            ("Nº LOJA", f_tabela_loja),
+            ("REFERENCIA LOJA", f_tabela_ref),
+            ("UF", f_tabela_uf),
+            ("ESTADO", f_tabela_estado),
+            ("NOME", f_tabela_nome),
+            ("SETOR", f_tabela_setor),
+            ("CARGO", f_tabela_cargo),
+            ("GRUPO", f_tabela_grupo),
+        ]:
+            if coluna in df_lojas_vis.columns:
+                mascara_tabela &= df_lojas_vis[coluna].astype(str).isin(selecionados)
+        df_lojas_vis = df_lojas_vis.loc[mascara_tabela].copy()
+
+        st.caption(f"📊 Exibindo {len(df_lojas_vis)} registro(s) conforme os filtros selecionados.")
+
         # A tabela consolidada agora pode ser editada diretamente.
         # As únicas colunas que permanecem automáticas/bloqueadas são:
         # - Nº do Grupo: sempre acompanha o Grupo;
