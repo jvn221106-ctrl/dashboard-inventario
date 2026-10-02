@@ -3561,7 +3561,29 @@ def renderizar_aba_gestao_lojas():
             df_logs = pd.DataFrame(historico_mudancas)
             if "Observações" not in df_logs.columns:
                 df_logs["Observações"] = ""
-            st.dataframe(df_logs, use_container_width=True)
+
+            # O histórico respeita as mesmas permissões de loja da visão geral.
+            # Administrador e Controladoria visualizam todo o histórico;
+            # demais perfis visualizam somente as lojas vinculadas ao usuário.
+            if perfil_usuario not in ["Administrador", "Controladoria"]:
+                lojas_permitidas_historico = [
+                    x.strip().upper()
+                    for x in str(loja_usuario).replace(" ", ",").split(",")
+                    if x.strip()
+                ]
+
+                if lojas_permitidas_historico and "Loja Afetada" in df_logs.columns:
+                    df_logs["__loja_historico"] = df_logs["Loja Afetada"].astype(str).str.upper().str.split(" - ").str[0].str.strip()
+                    df_logs = df_logs[
+                        df_logs["__loja_historico"].isin(lojas_permitidas_historico)
+                    ].drop(columns=["__loja_historico"])
+                elif not lojas_permitidas_historico:
+                    df_logs = df_logs.iloc[0:0].copy()
+
+            if not df_logs.empty:
+                st.dataframe(df_logs, use_container_width=True)
+            else:
+                st.info("Nenhuma mudança registrada para a(s) loja(s) vinculada(s) a este usuário.")
         else:
             st.info("Nenhuma mudança registrada até o momento.")
 
