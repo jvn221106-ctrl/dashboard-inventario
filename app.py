@@ -2703,15 +2703,71 @@ def renderizar_aba_gestao_lojas():
         if "Coluna 1" in df_lojas_vis.columns:
             config_tabela["Coluna 1"] = st.column_config.TextColumn("Observações", disabled=True)
 
+        # Coluna de seleção para exclusão: somente perfis administrativos podem excluir registros.
+        pode_excluir_linhas = perfil_usuario in ["Administrador", "Controladoria"]
+        df_editor_tabela = df_lojas_vis.copy()
+        if pode_excluir_linhas:
+            df_editor_tabela.insert(0, "🗑️ Excluir", False)
+            config_tabela["🗑️ Excluir"] = st.column_config.CheckboxColumn(
+                "🗑️ Excluir",
+                help="Marque a linha que deseja excluir.",
+                default=False
+            )
+
         tabela_editada = st.data_editor(
-            df_lojas_vis,
+            df_editor_tabela,
             key="editor_tabela_consolidada",
             use_container_width=True,
             hide_index=False,
-            disabled=colunas_bloqueadas_tabela,
+            disabled=(["🗑️ Excluir"] if pode_excluir_linhas else []) + colunas_bloqueadas_tabela,
             column_config=config_tabela,
             num_rows="fixed"
         )
+
+        if pode_excluir_linhas:
+            indices_excluir = [
+                idx for idx, linha in tabela_editada.iterrows()
+                if bool(linha.get("🗑️ Excluir", False))
+                and idx in df_lojas.index
+            ]
+            if indices_excluir:
+                st.warning(f"⚠️ {len(indices_excluir)} linha(s) selecionada(s) para exclusão. A exclusão é permanente na base atual.")
+                confirmar_exclusao = st.checkbox(
+                    "Confirmo que quero excluir as linhas selecionadas",
+                    key="confirmar_exclusao_linhas_tabela"
+                )
+                if st.button("🗑️ Excluir linhas selecionadas", type="secondary", key="excluir_linhas_tabela"):
+                    if not confirmar_exclusao:
+                        st.error("❌ Marque a confirmação antes de excluir as linhas selecionadas.")
+                    else:
+                        dados_lojas_atual = list(dados_lojas)
+                        historico_atual = list(historico_mudancas)
+                        usr_atual = st.session_state.get("usuario_atual", "Administrador")
+                        excluidos = 0
+
+                        for idx in sorted(indices_excluir, reverse=True):
+                            if idx >= len(dados_lojas_atual):
+                                continue
+                            registro = dados_lojas_atual[idx]
+                            num_loja_excluida = str(registro.get("Nº LOJA", "")).strip()
+                            ref_loja_excluida = str(registro.get("REFERENCIA LOJA", "")).strip()
+                            nome_excluido = str(registro.get("NOME", "")).strip()
+
+                            historico_atual.append({
+                                "Data/Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                "Usuário Responsável": usr_atual,
+                                "Loja Afetada": f"{num_loja_excluida} - {ref_loja_excluida}",
+                                "Colaborador": nome_excluido,
+                                "Descrição da Mudança": "Registro excluído diretamente da Tabela Consolidada de Lojas e Contatos.",
+                                "Observações": f"Registro excluído por {usr_atual}."
+                            })
+                            dados_lojas_atual.pop(idx)
+                            excluidos += 1
+
+                        if excluidos:
+                            salvar_dados_lojas(dados_lojas_atual, historico_atual)
+                            st.success(f"✅ {excluidos} linha(s) excluída(s) com sucesso e registrada(s) no histórico.")
+                            st.rerun()
 
         if st.button("💾 Salvar alterações da tabela", type="primary", key="salvar_tabela_consolidada"):
             dados_lojas_atual = list(dados_lojas)
@@ -2728,6 +2784,7 @@ def renderizar_aba_gestao_lojas():
                 novo = dict(original)
 
                 # Campos editáveis da tabela.
+                # A coluna de seleção de exclusão é apenas de controle da interface.
                 for campo in [
                     "Nº LOJA", "REFERENCIA LOJA", "UF", "ESTADO", "NOME", "EMAIL",
                     "TELEFONE", "SETOR", "CARGO", "GRUPO"
