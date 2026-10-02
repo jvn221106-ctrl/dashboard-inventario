@@ -2397,18 +2397,44 @@ def carregar_dados_db():
 
     return usuarios, removidos, historico_remocoes, historico_resets
 
-def salvar_dados_db(usuarios, removidos, historico_remocoes=None, historico_resets=None):
+def salvar_dados_db(usuarios, removidos, historico_remocoes=None, historico_resets=None, historico_acessos=None):
     if historico_remocoes is None:
         historico_remocoes = []
     if historico_resets is None:
         historico_resets = []
+    if historico_acessos is None:
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                historico_acessos = json.load(f).get("historico_acessos", [])
+        except Exception:
+            historico_acessos = []
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump({
             "usuarios": usuarios,
             "removidos": list(removidos),
             "historico_remocoes": historico_remocoes,
-            "historico_resets": historico_resets
+            "historico_resets": historico_resets,
+            "historico_acessos": historico_acessos
         }, f, indent=4, ensure_ascii=False)
+
+
+def registrar_evento_auditoria(usuario, evento, detalhes=""):
+    """Registra acessos e ações relevantes sem interferir no fluxo atual do banco."""
+    try:
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        data = {"usuarios": {}, "removidos": [], "historico_remocoes": [], "historico_resets": [], "historico_acessos": []}
+    acessos = data.get("historico_acessos", [])
+    acessos.append({
+        "data_hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "usuario": usuario,
+        "evento": evento,
+        "detalhes": detalhes
+    })
+    data["historico_acessos"] = acessos[-5000:]
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
 
 def gerar_hash(senha):
     return hashlib.sha256(senha.encode('utf-8')).hexdigest()
@@ -2580,6 +2606,7 @@ def renderizar_tela_login():
                 if sucesso:
                     st.session_state["logado"] = True
                     st.session_state["usuario_atual"] = email_input
+                    registrar_evento_auditoria(email_input, "LOGIN", "Primeiro acesso concluído")
                     st.success("🎉 Primeiro acesso realizado! Entrando...")
                     st.rerun()
                 else:
@@ -2588,6 +2615,7 @@ def renderizar_tela_login():
             if gerar_hash(senha_input) == dados_usuario["senha"]:
                 st.session_state["logado"] = True
                 st.session_state["usuario_atual"] = email_input
+                registrar_evento_auditoria(email_input, "LOGIN", "Login efetuado")
                 
                 if dados_usuario.get("forcar_redefinicao", False):
                     st.session_state["troca_obrigatoria"] = True
@@ -3662,6 +3690,11 @@ def renderizar_aba_gestao_lojas():
 def renderizar_aba_admin():
     st.header("⚙️ Painel do Administrador")
     usuarios, removidos, historico_remocoes, historico_resets = carregar_dados_db()
+    try:
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            historico_acessos = json.load(f).get("historico_acessos", [])
+    except Exception:
+        historico_acessos = []
 
     st.subheader("👥 Lista de Usuários e Status")
     dados_tabela = [
@@ -3790,11 +3823,13 @@ def renderizar_aba_admin():
     with col_exp:
         df_exp_resets = pd.DataFrame(historico_resets) if historico_resets else pd.DataFrame(columns=["usuario_afetado", "resetado_por", "data_hora"])
         df_exp_remocoes = pd.DataFrame(historico_remocoes) if historico_remocoes else pd.DataFrame(columns=["usuario_removido", "removido_por", "data_hora"])
+        df_exp_acessos = pd.DataFrame(historico_acessos) if historico_acessos else pd.DataFrame(columns=["data_hora", "usuario", "evento", "detalhes"])
 
         output_audit = io.BytesIO()
         with pd.ExcelWriter(output_audit, engine='openpyxl') as writer:
             df_exp_resets.to_excel(writer, index=False, sheet_name='Historico_Resets')
             df_exp_remocoes.to_excel(writer, index=False, sheet_name='Historico_Remocoes')
+            df_exp_acessos.to_excel(writer, index=False, sheet_name='Historico_Acessos')
         
         excel_audit_bytes = output_audit.getvalue()
 
@@ -3863,6 +3898,83 @@ def renderizar_aba_admin():
             st.dataframe(df_historico, use_container_width=True, hide_index=True)
         else:
             st.info("Nenhuma remoção registrada até o momento.")
+
+    st.markdown("---")
+    st.subheader("🔐 Histórico de Acessos e Ações")
+    if historico_acessos:
+        df_acessos = pd.DataFrame(historico_acessos).rename(columns={
+            "data_hora": "Data e Horário",
+            "usuario": "Usuário",
+            "evento": "Evento",
+            "detalhes": "Detalhes"
+        }).sort_values("Data e Horário", ascending=False)
+        st.dataframe(df_acessos.head(500), use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhum acesso ou ação auditável registrado ainda.")
+
+# --- PERMISSÕES E ANÁLISES GERENCIAIS DO DASHBOARD ---
+def obter_lojas_permitidas_dashboard(df_base, perfil_usuario, loja_usuario):
+    """Retorna as lojas que o perfil pode consultar no Dashboard."""
+    lojas = sorted([str(x) for x in df_base['Loja_Nome'].dropna().unique()
+                    if str(x).strip().lower() not in ['nan', 'none', '', 's/ centro']])
+
+    perfil_regional = {
+        "Regional 1": "Regional 1",
+        "Gerente de produtos 1": "Regional 1",
+        "Regional 2": "Regional 2",
+        "Gerente de produtos 2": "Regional 2",
+    }
+
+    if perfil_usuario in ["Administrador", "Controladoria"]:
+        return lojas
+
+    lojas_usuario = [x.strip().upper() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
+    if perfil_usuario in perfil_regional:
+        regional = perfil_regional[perfil_usuario]
+        lojas_regionais = sorted(df_base.loc[df_base['Regional_Nome'] == regional, 'Loja_Nome'].dropna().astype(str).unique())
+        if lojas_usuario:
+            permitidas = [x for x in lojas_regionais if x.upper() in lojas_usuario]
+            return permitidas or lojas_regionais
+        return lojas_regionais
+
+    # Gerente e Líder de Loja ficam restritos às lojas cadastradas no usuário.
+    permitidas = [x for x in lojas if x.upper() in lojas_usuario]
+    return permitidas
+
+
+def _agregar_resultado_mensal(df_base):
+    if df_base.empty:
+        return pd.DataFrame(columns=['Mes_Ano', 'Perda_RS', 'Perda_UN', 'Sobra_RS'])
+    temp = df_base.copy()
+    temp['Mes_Ordem'] = pd.to_datetime(temp['Mes_Ano'], format='%m/%Y', errors='coerce')
+    temp = temp[temp['Mes_Ordem'].notna()]
+    if temp.empty:
+        return pd.DataFrame(columns=['Mes_Ano', 'Perda_RS', 'Perda_UN', 'Sobra_RS'])
+    agrupado = temp.groupby(['Mes_Ano', 'Mes_Ordem']).agg(
+        Perda_RS=('Valor_Limpo', lambda x: abs(x[x < 0].sum())),
+        Perda_UN=('Qtd_Limpa', lambda x: abs(x[x < 0].sum())),
+        Sobra_RS=('Valor_Limpo', lambda x: x[x > 0].sum())
+    ).reset_index().sort_values('Mes_Ordem')
+    return agrupado
+
+
+def _comparar_periodos(df_base, mes_atual, mes_anterior):
+    def totais(mes):
+        d = df_base[df_base['Mes_Ano'] == mes]
+        return {
+            'valor': abs(float(d.loc[d['Valor_Limpo'] < 0, 'Valor_Limpo'].sum())),
+            'qtd': abs(float(d.loc[d['Qtd_Limpa'] < 0, 'Qtd_Limpa'].sum()))
+        }
+    atual = totais(mes_atual)
+    anterior = totais(mes_anterior)
+    def variacao(a, b):
+        return ((a - b) / b * 100) if b else (100.0 if a else 0.0)
+    return atual, anterior, variacao(atual['valor'], anterior['valor']), variacao(atual['qtd'], anterior['qtd'])
+
+
+def _formatar_variacao(valor):
+    return f"{valor:+.1f}%".replace('.', ',')
+
 
 # --- DASHBOARD VISUAL DE INVENTÁRIO ---
 def renderizar_dashboard():
@@ -3947,29 +4059,31 @@ def renderizar_dashboard():
         else:
             regionais_sel = regionais_disponiveis
 
-        lojas_unicas = [str(x) for x in df_ano[df_ano['Regional_Nome'].isin(regionais_sel)]['Loja_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem centro', 's/ centro']]
-        lojas_disponiveis = sorted(lojas_unicas)
-
+        lojas_disponiveis = obter_lojas_permitidas_dashboard(df_ano, perfil_usuario, loja_usuario)
         if perfil_usuario in ["Administrador", "Controladoria"]:
-            if selecionar_todos:
-                st.session_state["filtro_lojas_geral"] = list(lojas_disponiveis)
-            lojas_sel = st.sidebar.multiselect(
-                "Centros (Geral):",
-                options=lojas_disponiveis,
-                default=lojas_disponiveis,
-                key="filtro_lojas_geral"
-            )
+            chave_lojas = "filtro_lojas_geral"
         elif perfil_usuario in ["Regional 1", "Regional 2", "Gerente de produtos 1", "Gerente de produtos 2"]:
-            # Gerentes de Produtos também podem filtrar por loja, respeitando
-            # as lojas da regional à qual o perfil está vinculado.
-            lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
-            lojas_filtradas_usr = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] if lojas_permitidas_usr else lojas_disponiveis
-            if selecionar_todos:
-                st.session_state["filtro_lojas_geral_regional"] = list(lojas_filtradas_usr)
-            lojas_sel = st.sidebar.multiselect("Centros (Geral):", options=lojas_filtradas_usr, default=lojas_filtradas_usr, key="filtro_lojas_geral_regional")
+            chave_lojas = "filtro_lojas_geral_regional"
         else:
-            lojas_permitidas_usr = [x.strip() for x in str(loja_usuario).replace(" ", ",").split(",") if x.strip()]
-            lojas_sel = [x for x in lojas_disponiveis if x in lojas_permitidas_usr] or lojas_disponiveis
+            chave_lojas = "filtro_lojas_geral_loja"
+
+        lojas_atuais = [x for x in st.session_state.get(chave_lojas, lojas_disponiveis) if x in lojas_disponiveis]
+        if not lojas_atuais:
+            lojas_atuais = list(lojas_disponiveis)
+        if selecionar_todos:
+            lojas_atuais = list(lojas_disponiveis)
+            st.session_state[chave_lojas] = lojas_atuais
+
+        if perfil_usuario in ["Gerente", "Líder de Loja"]:
+            lojas_sel = list(lojas_atuais)
+            st.sidebar.caption("🏬 Acesso restrito às lojas vinculadas ao seu usuário.")
+        else:
+            lojas_sel = st.sidebar.multiselect(
+                "Centros / Lojas (Geral):",
+                options=lojas_disponiveis,
+                default=lojas_atuais,
+                key=chave_lojas
+            )
 
         marcas_unicas = [str(x) for x in df_ano['Marca_Nome'].unique() if str(x).lower() not in ['nan', 'none', '', 'sem marca']]
         marcas_disponiveis = sorted(marcas_unicas)
@@ -3993,510 +4107,76 @@ def renderizar_dashboard():
         st.title("📊 Dashboard Executivo de Inventário")
         st.markdown(f"**Usuário:** `{email_logado}` | **Perfil:** `{perfil_usuario}`")
 
-        # Arquivo anual do Dashboard: salva os dados do ano selecionado em Excel,
-        # para que cada exercício possa ser arquivado separadamente.
+        # Arquivo anual do Dashboard: exportação completa do exercício selecionado.
         if ano_dashboard is not None:
             with st.expander(f"📁 Arquivo anual do Dashboard — {ano_dashboard}", expanded=False):
-                st.caption("Este arquivo contém os dados de inventário do ano selecionado, respeitando os filtros gerais aplicados.")
-                df_exportacao = df_filtered.copy()
-                if not df_exportacao.empty:
-                    colunas_auxiliares = [c for c in ["Data_dt", "Ano"] if c in df_exportacao.columns]
-                    df_exportacao = df_exportacao.drop(columns=colunas_auxiliares, errors="ignore")
-                    output_dashboard_anual = io.BytesIO()
-                    with pd.ExcelWriter(output_dashboard_anual, engine="openpyxl") as writer:
-                        df_exportacao.to_excel(writer, index=False, sheet_name=f"Dashboard_{ano_dashboard}")
-                    output_dashboard_anual.seek(0)
-                    st.download_button(
-                        label=f"📥 Salvar Dashboard {ano_dashboard}",
-                        data=output_dashboard_anual.getvalue(),
-                        file_name=f"dashboard_inventario_{ano_dashboard}.xlsx",
+                st.caption("Exporte o exercício completo ou somente a visão atual com os filtros aplicados.")
+                df_ano_export = df_ano[
+                    (df_ano['Regional_Nome'].isin(regionais_sel)) &
+                    (df_ano['Loja_Nome'].isin(lojas_sel)) &
+                    (df_ano['Marca_Nome'].isin(marcas_sel))
+                ].copy()
+                df_filtrado_export = df_filtered.copy()
+
+                resumo_export = pd.DataFrame([{
+                    'Ano': ano_dashboard,
+                    'Meses selecionados': ', '.join(meses_sel),
+                    'Regiões': ', '.join(regionais_sel),
+                    'Lojas': ', '.join(lojas_sel),
+                    'Marcas': ', '.join(marcas_sel),
+                    'Perda R$': abs(float(df_ano_export.loc[df_ano_export['Valor_Limpo'] < 0, 'Valor_Limpo'].sum())),
+                    'Perda Qtd': abs(float(df_ano_export.loc[df_ano_export['Qtd_Limpa'] < 0, 'Qtd_Limpa'].sum())),
+                    'Sobras R$': float(df_ano_export.loc[df_ano_export['Valor_Limpo'] > 0, 'Valor_Limpo'].sum()),
+                    'Registros': len(df_ano_export)
+                }])
+                mensal_export = _agregar_resultado_mensal(df_ano_export)
+                por_loja_export = df_ano_export.groupby('Loja_Nome').agg(
+                    Perda_RS=('Valor_Limpo', lambda x: abs(x[x < 0].sum())),
+                    Perda_UN=('Qtd_Limpa', lambda x: abs(x[x < 0].sum()))
+                ).reset_index().sort_values('Perda_RS', ascending=False)
+                por_marca_export = df_ano_export.groupby('Marca_Nome').agg(
+                    Perda_RS=('Valor_Limpo', lambda x: abs(x[x < 0].sum())),
+                    Perda_UN=('Qtd_Limpa', lambda x: abs(x[x < 0].sum()))
+                ).reset_index().sort_values('Perda_RS', ascending=False)
+                por_prod_export = df_ano_export[df_ano_export['Valor_Limpo'] < 0].groupby(
+                    ['Material_Codigo', 'Material_Nome']
+                ).agg(Perda_RS=('Valor_Limpo', lambda x: abs(x.sum())), Perda_UN=('Qtd_Limpa', lambda x: abs(x[x < 0].sum()))).reset_index().sort_values('Perda_RS', ascending=False).head(100)
+
+                out_full = io.BytesIO()
+                with pd.ExcelWriter(out_full, engine='openpyxl') as writer:
+                    resumo_export.to_excel(writer, index=False, sheet_name='Resumo_Executivo')
+                    mensal_export.drop(columns=['Mes_Ordem'], errors='ignore').to_excel(writer, index=False, sheet_name='Evolucao_Mensal')
+                    por_loja_export.to_excel(writer, index=False, sheet_name='Por_Loja')
+                    por_marca_export.to_excel(writer, index=False, sheet_name='Por_Marca')
+                    por_prod_export.to_excel(writer, index=False, sheet_name='Top_Produtos')
+                    df_ano_export.drop(columns=['Data_dt', 'Ano'], errors='ignore').to_excel(writer, index=False, sheet_name='Dados_Anuais')
+                    df_filtrado_export.drop(columns=['Data_dt', 'Ano'], errors='ignore').to_excel(writer, index=False, sheet_name='Visao_Filtrada')
+                out_full.seek(0)
+
+                col_exp1, col_exp2 = st.columns(2)
+                with col_exp1:
+                    if st.download_button(
+                        label=f"📦 Exportar Dashboard completo {ano_dashboard}",
+                        data=out_full.getvalue(),
+                        file_name=f"Dashboard_Vonny_{ano_dashboard}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary",
-                        key=f"download_dashboard_anual_{ano_dashboard}"
+                        type="primary", key=f"download_dashboard_completo_{ano_dashboard}"
+                    ):
+                        registrar_evento_auditoria(email_logado, "EXPORTACAO_DASHBOARD", f"Ano {ano_dashboard} — arquivo completo")
+                with col_exp2:
+                    out_filtered = io.BytesIO()
+                    with pd.ExcelWriter(out_filtered, engine='openpyxl') as writer:
+                        df_filtrado_export.drop(columns=['Data_dt', 'Ano'], errors='ignore').to_excel(writer, index=False, sheet_name=f'Dashboard_{ano_dashboard}')
+                    out_filtered.seek(0)
+                    st.download_button(
+                        label=f"📥 Exportar somente filtros atuais",
+                        data=out_filtered.getvalue(),
+                        file_name=f"Dashboard_Vonny_{ano_dashboard}_filtrado.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"download_dashboard_filtrado_{ano_dashboard}"
                     )
-                    st.caption(f"{len(df_exportacao):,} registros incluídos no arquivo.".replace(",", "."))
-                else:
-                    st.info(f"Não há dados para o Dashboard de {ano_dashboard} com os filtros selecionados.")
+                st.caption(f"Arquivo completo: {len(df_ano_export):,} registros | Visão filtrada: {len(df_filtrado_export):,} registros.".replace(',', '.'))
 
-        st.markdown("---")
-
-        perda_total_rs = float(df_filtered[df_filtered['Valor_Limpo'] < 0]['Valor_Limpo'].sum())
-        perda_total_un = float(df_filtered[df_filtered['Qtd_Limpa'] < 0]['Qtd_Limpa'].sum())
-        sobra_total_rs = float(df_filtered[df_filtered['Valor_Limpo'] > 0]['Valor_Limpo'].sum())
-        resultado_net = sobra_total_rs + perda_total_rs
-
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-        kpi1.metric("Total de Perdas (Qtd)", formatar_qtd(perda_total_un))
-        kpi2.metric("Perda Total (R$)", formatar_moeda(perda_total_rs))
-        kpi3.metric("Sobras / Ajustes (+)", formatar_moeda(sobra_total_rs))
-        kpi4.metric("Resultado Net (Caixa)", formatar_moeda(resultado_net))
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2"]:
-            # ANÁLISE DE PRODUTOS
-            st.subheader("🛍️ Análise de Produtos por Nível de Perda")
-            tab_unificado, tab_por_loja = st.tabs(["🌐 Unificado (Geral)", "🏬 Por Loja (Centro)"])
-            
-            df_perdas_prod = df_filtered[(df_filtered['Qtd_Limpa'] < 0) | (df_filtered['Valor_Limpo'] < 0)].copy()
-            
-            with tab_unificado:
-                with st.expander("🔍 Filtro Local: Produtos (Unificado)"):
-                    col_fu1, col_fu2, col_fu3 = st.columns(3)
-                    with col_fu1:
-                        m_unif_sel = _multiselect_filtro("Filtrar Marcas:", sorted(df_perdas_prod['Marca_Nome'].unique()), "f_prod_unif_marca")
-                    with col_fu2:
-                        mes_unif_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_perdas_prod['Mes_Ano'].unique()), "f_prod_unif_mes")
-                    with col_fu3:
-                        top_n_unif = st.slider("Selecione o Top (Produtos Unificado):", min_value=10, max_value=100, value=15, step=5, key="top_prod_unif")
-    
-                df_perdas_unif_f = df_perdas_prod[
-                    (df_perdas_prod['Marca_Nome'].isin(m_unif_sel)) &
-                    (df_perdas_prod['Mes_Ano'].isin(mes_unif_sel))
-                ]
-    
-                st.markdown("#### 🚨 Maiores Perdas de Produtos (Unificado)")
-                col_unif_qtd, col_unif_val = st.columns(2)
-                
-                with col_unif_qtd:
-                    st.markdown(f"##### 📦 Top {top_n_unif} MAIORES por Quantidade (UN)")
-                    df_prod_qtd_unif = (
-                        df_perdas_unif_f[df_perdas_unif_f['Qtd_Limpa'] < 0]
-                        .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
-                        .sum().abs().reset_index()
-                        .sort_values(by='Qtd_Limpa', ascending=False)
-                    )
-                    df_prod_qtd_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_unif))])
-                    df_top_qtd_unif = df_prod_qtd_unif.head(top_n_unif).copy()
-                    df_top_qtd_unif['Qtd_Limpa'] = df_top_qtd_unif['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                    df_top_qtd_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade Perdida'}, inplace=True)
-                    st.dataframe(df_top_qtd_unif, use_container_width=True, hide_index=True)
-    
-                with col_unif_val:
-                    st.markdown(f"##### 💰 Top {top_n_unif} MAIORES por Valor (R$)")
-                    df_prod_val_unif = (
-                        df_perdas_unif_f[df_perdas_unif_f['Valor_Limpo'] < 0]
-                        .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
-                        .sum().abs().reset_index()
-                        .sort_values(by='Valor_Limpo', ascending=False)
-                    )
-                    df_prod_val_unif.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_unif))])
-                    df_top_val_unif = df_prod_val_unif.head(top_n_unif).copy()
-                    df_top_val_unif['Valor_Limpo'] = df_top_val_unif['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
-                    df_top_val_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor Perdido'}, inplace=True)
-                    st.dataframe(df_top_val_unif, use_container_width=True, hide_index=True)
-    
-                st.markdown("---")
-                st.markdown("#### ✅ Menores Perdas de Produtos (Unificado)")
-                col_unif_qtd_min, col_unif_val_min = st.columns(2)
-    
-                with col_unif_qtd_min:
-                    st.markdown(f"##### 📦 Top {top_n_unif} MENORES por Quantidade (UN)")
-                    df_prod_qtd_unif_min = (
-                        df_perdas_unif_f[df_perdas_unif_f['Qtd_Limpa'] < 0]
-                        .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
-                        .sum().abs().reset_index()
-                        .sort_values(by='Qtd_Limpa', ascending=True)
-                    )
-                    df_prod_qtd_unif_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_unif_min))])
-                    df_min_qtd_unif = df_prod_qtd_unif_min.head(top_n_unif).copy()
-                    df_min_qtd_unif['Qtd_Limpa'] = df_min_qtd_unif['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                    df_min_qtd_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade Perdida'}, inplace=True)
-                    st.dataframe(df_min_qtd_unif, use_container_width=True, hide_index=True)
-    
-                with col_unif_val_min:
-                    st.markdown(f"##### 💰 Top {top_n_unif} MENORES por Valor (R$)")
-                    df_prod_val_unif_min = (
-                        df_perdas_unif_f[df_perdas_unif_f['Valor_Limpo'] < 0]
-                        .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
-                        .sum().abs().reset_index()
-                        .sort_values(by='Valor_Limpo', ascending=True)
-                    )
-                    df_prod_val_unif_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_unif_min))])
-                    df_min_val_unif = df_prod_val_unif_min.head(top_n_unif).copy()
-                    df_min_val_unif['Valor_Limpo'] = df_min_val_unif['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
-                    df_min_val_unif.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor Perdido'}, inplace=True)
-                    st.dataframe(df_min_val_unif, use_container_width=True, hide_index=True)
-    
-            with tab_por_loja:
-                lojas_existentes = sorted([x for x in df_perdas_prod['Loja_Nome'].unique() if x])
-                if lojas_existentes:
-                    centro_selecionado = st.selectbox("Selecione o Centro (Loja):", options=lojas_existentes, key="f_prod_loja_centro")
-                    
-                    with st.expander("🔍 Filtro Local: Marcas, Meses e Top N da Loja Selecionada"):
-                        col_fl1, col_fl2, col_fl3 = st.columns(3)
-                        with col_fl1:
-                            marcas_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Marca_Nome'].unique())
-                            m_loja_sel = _multiselect_filtro("Filtrar Marcas:", marcas_loja_opts, "f_prod_loja_marca")
-                        with col_fl2:
-                            meses_loja_opts = sorted(df_perdas_prod[df_perdas_prod['Loja_Nome'] == centro_selecionado]['Mes_Ano'].unique())
-                            mes_loja_sel = _multiselect_filtro("Filtrar Mês/Ano:", meses_loja_opts, "f_prod_loja_mes")
-                        with col_fl3:
-                            top_n_loja = st.slider("Selecione o Top (Produtos por Loja):", min_value=10, max_value=100, value=10, step=5, key="top_prod_loja")
-    
-                    df_loja_prod = df_perdas_prod[
-                        (df_perdas_prod['Loja_Nome'] == centro_selecionado) &
-                        (df_perdas_prod['Marca_Nome'].isin(m_loja_sel)) &
-                        (df_perdas_prod['Mes_Ano'].isin(mes_loja_sel))
-                    ]
-                    
-                    st.markdown(f"#### 🚨 Maiores Perdas em `{centro_selecionado}`")
-                    col_loja_qtd, col_loja_val = st.columns(2)
-                    
-                    with col_loja_qtd:
-                        st.markdown(f"##### 📦 Top {top_n_loja} MAIORES por Qtd em `{centro_selecionado}`")
-                        df_prod_qtd_loja = (
-                            df_loja_prod[df_loja_prod['Qtd_Limpa'] < 0]
-                            .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
-                            .sum().abs().reset_index()
-                            .sort_values(by='Qtd_Limpa', ascending=False)
-                        )
-                        df_prod_qtd_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_loja))])
-                        df_top_qtd_loja = df_prod_qtd_loja.head(top_n_loja).copy()
-                        df_top_qtd_loja['Qtd_Limpa'] = df_top_qtd_loja['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                        df_top_qtd_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade'}, inplace=True)
-                        st.dataframe(df_top_qtd_loja, use_container_width=True, hide_index=True)
-    
-                    with col_loja_val:
-                        st.markdown(f"##### 💰 Top {top_n_loja} MAIORES por Valor em `{centro_selecionado}`")
-                        df_prod_val_loja = (
-                            df_loja_prod[df_loja_prod['Valor_Limpo'] < 0]
-                            .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
-                            .sum().abs().reset_index()
-                            .sort_values(by='Valor_Limpo', ascending=False)
-                        )
-                        df_prod_val_loja.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_loja))])
-                        df_top_val_loja = df_prod_val_loja.head(top_n_loja).copy()
-                        df_top_val_loja['Valor_Limpo'] = df_top_val_loja['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
-                        df_top_val_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor'}, inplace=True)
-                        st.dataframe(df_top_val_loja, use_container_width=True, hide_index=True)
-    
-                    st.markdown("---")
-                    st.markdown(f"#### ✅ Menores Perdas em `{centro_selecionado}`")
-                    col_loja_qtd_min, col_loja_val_min = st.columns(2)
-    
-                    with col_loja_qtd_min:
-                        st.markdown(f"##### 📦 Top {top_n_loja} MENORES por Qtd em `{centro_selecionado}`")
-                        df_prod_qtd_loja_min = (
-                            df_loja_prod[df_loja_prod['Qtd_Limpa'] < 0]
-                            .groupby(['Material_Codigo', 'Material_Nome'])['Qtd_Limpa']
-                            .sum().abs().reset_index()
-                            .sort_values(by='Qtd_Limpa', ascending=True)
-                        )
-                        df_prod_qtd_loja_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_qtd_loja_min))])
-                        df_min_qtd_loja = df_prod_qtd_loja_min.head(top_n_loja).copy()
-                        df_min_qtd_loja['Qtd_Limpa'] = df_min_qtd_loja['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                        df_min_qtd_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Qtd_Limpa': 'Quantidade'}, inplace=True)
-                        st.dataframe(df_min_qtd_loja, use_container_width=True, hide_index=True)
-    
-                    with col_loja_val_min:
-                        st.markdown(f"##### 💰 Top {top_n_loja} MENORES por Valor em `{centro_selecionado}`")
-                        df_prod_val_loja_min = (
-                            df_loja_prod[df_loja_prod['Valor_Limpo'] < 0]
-                            .groupby(['Material_Codigo', 'Material_Nome'])['Valor_Limpo']
-                            .sum().abs().reset_index()
-                            .sort_values(by='Valor_Limpo', ascending=True)
-                        )
-                        df_prod_val_loja_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_prod_val_loja_min))])
-                        df_min_val_loja = df_prod_val_loja_min.head(top_n_loja).copy()
-                        df_min_val_loja['Valor_Limpo'] = df_min_val_loja['Valor_Limpo'].apply(lambda x: f"R$ -{x:,.2f}")
-                        df_min_val_loja.rename(columns={'Material_Codigo': 'Material', 'Material_Nome': 'Descrição do Produto', 'Valor_Limpo': 'Valor'}, inplace=True)
-                        st.dataframe(df_min_val_loja, use_container_width=True, hide_index=True)
-                else:
-                    st.info("Nenhum registro de perda encontrado para os filtros selecionados.")
-    
-            st.markdown("<br>", unsafe_allow_html=True)
-
-        # COMPARATIVO REGIONAL
-        if perfil_usuario in ["Administrador", "Controladoria"]:
-            st.subheader("🗺️ Comparativo por Divisão Regional (Regional 1 vs Regional 2)")
-            
-            with st.expander("🔍 Filtro Local: Comparativo Regional"):
-                col_fr1, col_fr2 = st.columns(2)
-                with col_fr1:
-                    m_reg_sel = _multiselect_filtro("Filtrar Marcas:", sorted(df_filtered['Marca_Nome'].unique()), "f_reg_marcas")
-                with col_fr2:
-                    mes_reg_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_filtered['Mes_Ano'].unique()), "f_reg_mes")
-            
-            df_reg_filtered = df_filtered[
-                (df_filtered['Marca_Nome'].isin(m_reg_sel)) &
-                (df_filtered['Mes_Ano'].isin(mes_reg_sel))
-            ]
-
-            df_reg_comp = (
-                df_reg_filtered[df_reg_filtered['Valor_Limpo'] < 0]
-                .groupby('Regional_Nome')
-                .agg({'Qtd_Limpa': lambda x: abs(x.sum()), 'Valor_Limpo': lambda x: abs(x.sum())})
-                .reset_index()
-                .sort_values(by='Valor_Limpo', ascending=False)
-            )
-            if not df_reg_comp.empty:
-                df_reg_comp['Texto_Valor'] = df_reg_comp['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                total_reg_val = df_reg_comp['Valor_Limpo'].sum()
-
-                fig_reg_comp = px.bar(
-                    df_reg_comp,
-                    x='Regional_Nome',
-                    y='Valor_Limpo',
-                    text='Texto_Valor',
-                    color='Regional_Nome',
-                    title=f"Comparativo por Divisão Regional — Total: -R$ {total_reg_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-                    color_discrete_map={'Regional 1': '#4ba3e3', 'Regional 2': '#ff7f0e'},
-                    labels={'Valor_Limpo': 'Perda (R$)', 'Regional_Nome': 'Divisão Regional'}
-                )
-                fig_reg_comp.update_traces(textposition='inside')
-                fig_reg_comp.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
-                st.plotly_chart(fig_reg_comp, use_container_width=True)
-                st.markdown("<br>", unsafe_allow_html=True)
-
-        # RANKING POR CENTRO
-        if perfil_usuario in ["Administrador", "Regional 1", "Regional 2", "Controladoria", "Gerente de produtos 1", "Gerente de produtos 2"]: 
-            st.subheader("🏬 Análise e Ranking por Centro")
-
-            with st.expander("🔍 Filtro Local: Perdas por Centro"):
-                if perfil_usuario == "Administrador":
-                    col_fc1, col_fc2, col_fc3, col_fc4 = st.columns(4)
-                    with col_fc4:
-                        top_n_centros = st.slider("Selecione o Top (Centros):", min_value=10, max_value=100, value=10, step=5, key="top_centros_adm")
-                else:
-                    col_fc1, col_fc2, col_fc3 = st.columns(3)
-                    top_n_centros = 10
-
-                with col_fc1:
-                    c_lojas_sel = _multiselect_filtro("Filtrar Centros Específicos:", sorted(df_filtered['Loja_Nome'].unique()), "f_centro_lojas")
-                with col_fc2:
-                    c_marcas_sel = _multiselect_filtro("Filtrar Marcas:", sorted(df_filtered['Marca_Nome'].unique()), "f_centro_marcas")
-                with col_fc3:
-                    c_meses_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_filtered['Mes_Ano'].unique()), "f_centro_meses")
-
-            df_centros_local = df_filtered[
-                (df_filtered['Loja_Nome'].isin(c_lojas_sel)) &
-                (df_filtered['Marca_Nome'].isin(c_marcas_sel)) &
-                (df_filtered['Mes_Ano'].isin(c_meses_sel))
-            ]
-
-            graf_col1, graf_col2 = st.columns(2)
-
-            with graf_col1:
-                df_qtd_lojas = (
-                    df_centros_local[df_centros_local['Qtd_Limpa'] < 0]
-                    .groupby('Loja_Nome')['Qtd_Limpa']
-                    .sum().abs().reset_index()
-                    .sort_values(by='Qtd_Limpa', ascending=False)
-                )
-                if not df_qtd_lojas.empty:
-                    df_qtd_lojas['Texto_Qtd'] = df_qtd_lojas['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                    total_centros_qtd = df_qtd_lojas['Qtd_Limpa'].sum()
-
-                    fig_qtd_lojas = px.bar(
-                        df_qtd_lojas,
-                        x='Loja_Nome',
-                        y='Qtd_Limpa',
-                        text='Texto_Qtd',
-                        title=f"Perda por Centro (Qtd) — Total: -{total_centros_qtd:,.0f} un".replace(",", "."),
-                        labels={'Qtd_Limpa': 'Perda (Qtd)', 'Loja_Nome': 'Centro'}
-                    )
-                    fig_qtd_lojas.update_traces(marker_color='#4ba3e3', textposition='inside')
-                    fig_qtd_lojas.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                    st.plotly_chart(fig_qtd_lojas, use_container_width=True)
-
-            with graf_col2:
-                df_lojas = (
-                    df_centros_local[df_centros_local['Valor_Limpo'] < 0]
-                    .groupby('Loja_Nome')['Valor_Limpo']
-                    .sum().abs().reset_index()
-                    .sort_values(by='Valor_Limpo', ascending=False)
-                )
-                if not df_lojas.empty:
-                    df_lojas['Texto_Valor'] = df_lojas['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                    total_centros_val = df_lojas['Valor_Limpo'].sum()
-
-                    fig_lojas = px.bar(
-                        df_lojas,
-                        x='Loja_Nome',
-                        y='Valor_Limpo',
-                        text='Texto_Valor',
-                        title=f"Perda por Centro (R$) — Total: -R$ {total_centros_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-                        labels={'Valor_Limpo': 'Perda (R$)', 'Loja_Nome': 'Centro'}
-                    )
-                    fig_lojas.update_traces(marker_color='#70bbfd', textposition='inside')
-                    fig_lojas.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                    st.plotly_chart(fig_lojas, use_container_width=True)
-
-            col_tb_c1, col_tb_c2 = st.columns(2)
-
-            with col_tb_c1:
-                st.markdown(f"##### 🚨 Ranking: Top {top_n_centros} Centros com MAIOR Perda")
-                df_centros_completo = (
-                    df_centros_local[(df_centros_local['Valor_Limpo'] < 0) | (df_centros_local['Qtd_Limpa'] < 0)]
-                    .groupby(['Loja_Nome', 'Regional_Nome'])
-                    .agg({
-                        'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
-                        'Valor_Limpo': lambda x: abs(x[x < 0].sum())
-                    })
-                    .reset_index()
-                    .sort_values(by='Valor_Limpo', ascending=False)
-                )
-                df_centros_completo.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_centros_completo))])
-                df_centros_completo = df_centros_completo[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-                df_centros_completo.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
-
-                df_top_centros = df_centros_completo.head(top_n_centros).copy()
-                df_top_centros['Perda (Qtd)'] = df_top_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-                df_top_centros['Perda (R$)'] = df_top_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
-                st.dataframe(df_top_centros, use_container_width=True, hide_index=True)
-
-            with col_tb_c2:
-                st.markdown(f"##### ✅ Ranking: Top {top_n_centros} Centros com MENOR Perda")
-                df_centros_completo_min = (
-                    df_centros_local[(df_centros_local['Valor_Limpo'] < 0) | (df_centros_local['Qtd_Limpa'] < 0)]
-                    .groupby(['Loja_Nome', 'Regional_Nome'])
-                    .agg({
-                        'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
-                        'Valor_Limpo': lambda x: abs(x[x < 0].sum())
-                    })
-                    .reset_index()
-                    .sort_values(by='Valor_Limpo', ascending=True)
-                )
-                df_centros_completo_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_centros_completo_min))])
-                df_centros_completo_min = df_centros_completo_min[['Posição', 'Loja_Nome', 'Regional_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-                df_centros_completo_min.rename(columns={'Loja_Nome': 'Centro', 'Regional_Nome': 'Divisão Regional', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
-
-                df_min_centros = df_centros_completo_min.head(top_n_centros).copy()
-                df_min_centros['Perda (Qtd)'] = df_min_centros['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-                df_min_centros['Perda (R$)'] = df_min_centros['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
-                st.dataframe(df_min_centros, use_container_width=True, hide_index=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # PERDAS POR MARCA
-        st.subheader("🏷️ Análise e Ranking por Marca")
-
-        with st.expander("🔍 Filtro Local: Perdas por Marca"):
-            if perfil_usuario in ["Gerente", "Líder de Loja"]:
-                col_fm1, col_fm2, col_fm3 = st.columns(3)
-                with col_fm1:
-                    m_marcas_sel = _multiselect_filtro("Filtrar Marcas Específicas:", sorted(df_filtered['Marca_Nome'].unique()), "f_marca_marcas")
-                with col_fm2:
-                    m_meses_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_filtered['Mes_Ano'].unique()), "f_marca_meses")
-                with col_fm3:
-                    top_n_marcas = st.slider("Selecione o Top (Marcas):", min_value=10, max_value=100, value=10, step=5, key="top_marcas")
-                m_centros_sel = sorted(df_filtered['Loja_Nome'].unique())
-            else:
-                col_fm1, col_fm2, col_fm3, col_fm4 = st.columns(4)
-                with col_fm1:
-                    m_marcas_sel = _multiselect_filtro("Filtrar Marcas Específicas:", sorted(df_filtered['Marca_Nome'].unique()), "f_marca_marcas")
-                with col_fm2:
-                    m_centros_sel = _multiselect_filtro("Filtrar Centros/Lojas:", sorted(df_filtered['Loja_Nome'].unique()), "f_marca_centros")
-                with col_fm3:
-                    m_meses_sel = _multiselect_filtro("Filtrar Mês/Ano:", sorted(df_filtered['Mes_Ano'].unique()), "f_marca_meses")
-                with col_fm4:
-                    top_n_marcas = st.slider("Selecione o Top (Marcas):", min_value=10, max_value=100, value=10, step=5, key="top_marcas")
-
-        df_marcas_local = df_filtered[
-            (df_filtered['Marca_Nome'].isin(m_marcas_sel)) &
-            (df_filtered['Loja_Nome'].isin(m_centros_sel)) &
-            (df_filtered['Mes_Ano'].isin(m_meses_sel))
-        ]
-
-        col_tb_m1, col_tb_m2 = st.columns(2)
-
-        with col_tb_m1:
-            st.markdown(f"##### 🚨 Ranking: Top {top_n_marcas} Marcas com MAIOR Perda")
-            df_marcas_completo = (
-                df_marcas_local[(df_marcas_local['Valor_Limpo'] < 0) | (df_marcas_local['Qtd_Limpa'] < 0)]
-                .groupby('Marca_Nome')
-                .agg({
-                    'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
-                    'Valor_Limpo': lambda x: abs(x[x < 0].sum())
-                })
-                .reset_index()
-                .sort_values(by='Valor_Limpo', ascending=False)
-            )
-            df_marcas_completo.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_marcas_completo))])
-            df_marcas_completo = df_marcas_completo[['Posição', 'Marca_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-            df_marcas_completo.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
-
-            df_top_marcas = df_marcas_completo.head(top_n_marcas).copy()
-            df_top_marcas['Perda (Qtd)'] = df_top_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-            df_top_marcas['Perda (R$)'] = df_top_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
-            st.dataframe(df_top_marcas, use_container_width=True, hide_index=True)
-
-        with col_tb_m2:
-            st.markdown(f"##### ✅ Ranking: Top {top_n_marcas} Marcas com MENOR Perda")
-            df_marcas_completo_min = (
-                df_marcas_local[(df_marcas_local['Valor_Limpo'] < 0) | (df_marcas_local['Qtd_Limpa'] < 0)]
-                .groupby('Marca_Nome')
-                .agg({
-                    'Qtd_Limpa': lambda x: abs(x[x < 0].sum()),
-                    'Valor_Limpo': lambda x: abs(x[x < 0].sum())
-                })
-                .reset_index()
-                .sort_values(by='Valor_Limpo', ascending=True)
-            )
-            df_marcas_completo_min.insert(0, 'Posição', [f"{i+1}º" for i in range(len(df_marcas_completo_min))])
-            df_marcas_completo_min = df_marcas_completo_min[['Posição', 'Marca_Nome', 'Qtd_Limpa', 'Valor_Limpo']]
-            df_marcas_completo_min.rename(columns={'Marca_Nome': 'Marca', 'Qtd_Limpa': 'Perda (Qtd)', 'Valor_Limpo': 'Perda (R$)'}, inplace=True)
-
-            df_min_marcas = df_marcas_completo_min.head(top_n_marcas).copy()
-            df_min_marcas['Perda (Qtd)'] = df_min_marcas['Perda (Qtd)'].apply(lambda x: f"-{x:,.0f} un")
-            df_min_marcas['Perda (R$)'] = df_min_marcas['Perda (R$)'].apply(lambda x: f"R$ -{x:,.2f}")
-            st.dataframe(df_min_marcas, use_container_width=True, hide_index=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        marca_col1, marca_col2 = st.columns(2)
-
-        df_perdas_marcas = df_marcas_local[(df_marcas_local['Valor_Limpo'] < 0) | (df_marcas_local['Qtd_Limpa'] < 0)]
-
-        with marca_col1:
-            st.markdown(f"##### 📦 Top {top_n_marcas} Perdas por Marca - Tendência (Qtd)")
-            df_marca_qtd = (
-                df_perdas_marcas[df_perdas_marcas['Qtd_Limpa'] < 0]
-                .groupby('Marca_Nome')['Qtd_Limpa']
-                .sum().abs().reset_index()
-                .sort_values(by='Qtd_Limpa', ascending=False)
-                .head(top_n_marcas)
-            )
-            if not df_marca_qtd.empty:
-                df_marca_qtd['Texto_Qtd'] = df_marca_qtd['Qtd_Limpa'].apply(lambda x: f"-{x:,.0f} un")
-                total_marcas_qtd = df_marca_qtd['Qtd_Limpa'].sum()
-
-                fig_marca_qtd = px.line(
-                    df_marca_qtd,
-                    x='Marca_Nome',
-                    y='Qtd_Limpa',
-                    text='Texto_Qtd',
-                    markers=True,
-                    title=f"Perdas por Marca (Top {top_n_marcas} - Qtd) — Total Top {top_n_marcas}: -{total_marcas_qtd:,.0f} un".replace(",", "."),
-                    labels={'Qtd_Limpa': 'Perda (Qtd)', 'Marca_Nome': 'Marca'}
-                )
-                fig_marca_qtd.update_traces(line_color='#ff7f0e', line_width=3, marker_size=7, textposition='top center')
-                fig_marca_qtd.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_tickangle=-45)
-                st.plotly_chart(fig_marca_qtd, use_container_width=True)
-
-        with marca_col2:
-            st.markdown(f"##### 🏷️ Top {top_n_marcas} Perdas por Marca - Tendência (R$)")
-            df_marca_rs = (
-                df_perdas_marcas[df_perdas_marcas['Valor_Limpo'] < 0]
-                .groupby('Marca_Nome')['Valor_Limpo']
-                .sum().abs().reset_index()
-                .sort_values(by='Valor_Limpo', ascending=False)
-                .head(top_n_marcas)
-            )
-            if not df_marca_rs.empty:
-                df_marca_rs['Texto_RS'] = df_marca_rs['Valor_Limpo'].apply(lambda x: f"-R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                total_marcas_val = df_marca_rs['Valor_Limpo'].sum()
-
-                fig_marca_rs = px.line(
-                    df_marca_rs,
-                    x='Marca_Nome',
-                    y='Valor_Limpo',
-                    text='Texto_RS',
-                    markers=True,
-                    title=f"Perdas por Marca (Top {top_n_marcas} - R$) — Total Top {top_n_marcas}: -R$ {total_marcas_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-                    labels={'Valor_Limpo': 'Perda (R$)', 'Marca_Nome': 'Marca'}
-                )
-                fig_marca_rs.update_traces(line_color='#4ba3e3', line_width=3, marker_size=7, textposition='top center')
                 fig_marca_rs.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_tickangle=-45)
                 st.plotly_chart(fig_marca_rs, use_container_width=True)
 
@@ -4554,6 +4234,7 @@ else:
                         st.error(msg)
 
     if st.sidebar.button("🚪 Sair / Logout"):
+        registrar_evento_auditoria(usr_atual, "LOGOUT", "Saída do sistema")
         st.session_state["logado"] = False
         st.session_state["usuario_atual"] = None
         st.session_state["troca_obrigatoria"] = False
